@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { ArrowUpDown, Hash, ListChecks, X } from "lucide-react";
+import { ArrowUpDown, Hash, ListChecks, Plus, X } from "lucide-react";
 import { useNav } from "../nav.jsx";
 import TicketRow from "../components/TicketRow.jsx";
 
 export default function QueueView() {
-  const { tickets, filter, setFilter, projects } = useNav();
+  const { tickets, filter, setFilter, projects, openNewTicket } = useNav();
   const [hz, setHz] = useState("Queue");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("score");
@@ -36,8 +36,13 @@ export default function QueueView() {
   return (
     <>
       <div className="gs-eyebrow"><ListChecks size={13} />STATION · QUEUE</div>
-      <h1 className="gs-h1">Queue</h1>
-      <div className="gs-qtools">
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 3 }}>
+        <h1 className="gs-h1" style={{ margin: 0 }}>Queue</h1>
+        <button className="gs-btn primary" style={{ marginLeft: "auto" }} onClick={openNewTicket}>
+          <Plus size={15} />New ticket
+        </button>
+      </div>
+      <div className="gs-qtools" style={{ marginTop: 16 }}>
         <div className="gs-qsearch">
           <Hash size={14} color="var(--ink-3)" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter tickets…" />

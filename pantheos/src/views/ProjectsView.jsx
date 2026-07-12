@@ -5,7 +5,7 @@ import { StatusPill } from "../components/pills.jsx";
 import TicketRow from "../components/TicketRow.jsx";
 import ContainerTable from "../components/ContainerTable.jsx";
 import AreaSpark from "../components/AreaSpark.jsx";
-import { autoLabel, repoUrl } from "../lib/helpers.js";
+import { autoLabel, openExternal, repoUrl } from "../lib/helpers.js";
 import { api } from "../api.js";
 
 export function UsersChart() {
@@ -64,7 +64,7 @@ export function ProjectDetail({ pk }) {
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
         <h1 className="gs-h1" style={{ margin: 0 }}>{p.name}</h1><StatusPill s={p.status} />
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          {p.repo && <button className="gs-btn ghost" onClick={() => toast(`Opening ${repoUrl(p.repo)}`)}><GitBranch size={14} />Repo</button>}
+          {p.repo && <button className="gs-btn ghost" onClick={() => openExternal(repoUrl(p.repo))}><GitBranch size={14} />Repo</button>}
           {conts.length > 0 && <button className="gs-btn ghost" onClick={() => go({ view: "monitor", projectId: pk })}><Gauge size={14} />Monitor</button>}
         </div>
       </div>

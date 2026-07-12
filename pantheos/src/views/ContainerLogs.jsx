@@ -14,6 +14,20 @@ export default function ContainerLogs({ id }) {
   const [all, setAll] = useState([]);
   useEffect(() => { api.containerLogs(id).then((d) => setAll(d.lines)); }, [id]);
   const lines = all.filter((l) => lvl === "all" || l.lvl === lvl);
+
+  const download = () => {
+    const text = all.map((l) => `${l.t}  ${LV[l.lvl].padEnd(5)}  ${l.msg}`).join("\n");
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${c.id}.log`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast("Log bundle downloaded");
+  };
+
   return (
     <>
       <div className="gs-eyebrow">
@@ -25,7 +39,7 @@ export default function ContainerLogs({ id }) {
         <StatusPill s={c.status} />
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           {c.up !== "LOS" && <span className="gs-follow"><span className="dot go" style={{ boxShadow: "none", width: 6, height: 6 }} />following</span>}
-          <button className="gs-btn ghost" onClick={() => toast("Log bundle downloaded")}><Download size={15} />Download</button>
+          <button className="gs-btn ghost" onClick={download}><Download size={15} />Download</button>
         </div>
       </div>
       <div className="gs-filters">

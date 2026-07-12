@@ -13,6 +13,40 @@ def test_list_tickets(client):
     assert evc["deps"][0]["id"] == "EVC-0071"
 
 
+def test_create_ticket_with_project(client):
+    r = client.post("/api/tickets", json={
+        "title": "New investigation", "project_key": "ghstats", "pri": 1,
+        "effort_hours": 4, "deadline_hours": 72, "summary": "look into it"})
+    assert r.status_code == 201
+    t = r.get_json()
+    assert t["title"] == "New investigation"
+    assert t["proj"] == "ghstats"
+    assert t["area"] == "SIDE PROJECTS"
+    assert t["life"] == "queued" and t["agent"] == "idle" and t["source"] == "manual"
+    assert t["due"] == "in 3d"           # derived from deadline_hours
+    assert float(t["score"]) > 0          # derived score
+    assert client.get("/api/tickets").get_json().__len__() == 10  # now 10
+    assert client.get(f"/api/tickets/{t['id']}").status_code == 200
+
+
+def test_create_ticket_area_only_defaults(client):
+    r = client.post("/api/tickets", json={"title": "Study for midterm", "area_id": "stat511"})
+    assert r.status_code == 201
+    t = r.get_json()
+    assert t["proj"] is None and t["area"] == "STAT 511"
+    assert t["pri"] == 2                   # default priority
+    assert t["due"] is None                # no deadline
+    assert t["summary"] == "Study for midterm"  # summary defaults to title
+
+
+def test_create_ticket_validation(client):
+    assert client.post("/api/tickets", json={"title": "  "}).status_code == 400
+    assert client.post("/api/tickets", json={"title": "x", "project_key": "nope"}).status_code == 400
+    assert client.post("/api/tickets", json={"title": "x"}).status_code == 400  # no area/project
+    assert client.post("/api/tickets", json={"title": "x", "area_id": "nope"}).status_code == 400
+    assert client.post("/api/tickets", json={"title": "x", "area_id": "stat511", "pri": 9}).status_code == 400
+
+
 def test_get_ticket_and_404(client):
     assert client.get("/api/tickets/GRD-0182").status_code == 200
     assert client.get("/api/tickets/NOPE").status_code == 404

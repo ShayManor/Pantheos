@@ -12,6 +12,8 @@ async function req(method, url, body) {
 
 export const api = {
   tickets: () => req("GET", "/api/tickets"),
+  createTicket: (data) => req("POST", "/api/tickets", data),
+  areas: () => req("GET", "/api/areas"),
   projects: () => req("GET", "/api/projects"),
   hosts: () => req("GET", "/api/hosts"),
   containers: () => req("GET", "/api/containers"),

@@ -12,6 +12,7 @@ import ContainerDetail from "./views/ContainerDetail.jsx";
 import ContainerLogs from "./views/ContainerLogs.jsx";
 import FlightView from "./views/FlightView.jsx";
 import SearchPalette from "./components/SearchPalette.jsx";
+import NewTicketModal from "./components/NewTicketModal.jsx";
 
 export default function Pantheos() {
   const [ready, setReady] = useState(false);
@@ -19,17 +20,19 @@ export default function Pantheos() {
   const [projects, setProjects] = useState({});
   const [hosts, setHosts] = useState({});
   const [containers, setContainers] = useState([]);
+  const [areas, setAreas] = useState([]);
 
   const [stack, setStack] = useState([{ view: "queue" }]);
   const [monMode, setMonMode] = useState("projects");
   const [filter, setFilter] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [newTicketOpen, setNewTicketOpen] = useState(false);
   const [met, setMet] = useState(15153);
 
   useEffect(() => {
-    Promise.all([api.tickets(), api.projects(), api.hosts(), api.containers()]).then(
-      ([t, p, h, c]) => { setTickets(t); setProjects(p); setHosts(h); setContainers(c); setReady(true); }
+    Promise.all([api.tickets(), api.projects(), api.hosts(), api.containers(), api.areas()]).then(
+      ([t, p, h, c, a]) => { setTickets(t); setProjects(p); setHosts(h); setContainers(c); setAreas(a); setReady(true); }
     );
   }, []);
 
@@ -61,6 +64,9 @@ export default function Pantheos() {
   const setLifecycle = (id, life) => {
     api.setLife(id, life).then((updated) => setTickets((ts) => ts.map((t) => (t.id === id ? updated : t))));
   };
+  const createTicket = (payload) =>
+    api.createTicket(payload).then((ticket) => { setTickets((ts) => [...ts, ticket]); return ticket; });
+  const openNewTicket = () => setNewTicketOpen(true);
 
   const nav = [
     { k: "queue", label: "Queue", icon: ListChecks, cnt: tickets.filter((t) => t.life !== "archived").length },
@@ -77,7 +83,8 @@ export default function Pantheos() {
     return () => window.removeEventListener("keydown", h);
   }, [searchOpen]);
 
-  const apiCtx = { go, back, root, toast, tickets, launchTicket, setLifecycle, filter, setFilter, projects, hosts, containers };
+  const apiCtx = { go, back, root, toast, tickets, launchTicket, setLifecycle, createTicket, openNewTicket,
+    filter, setFilter, projects, hosts, containers, areas };
 
   const section = cur.ticketId ? "queue" : cur.view;
   const secName = { queue: "Queue", projects: "Projects", monitor: "Monitor", flight: "Delphi" }[section] || "Queue";
@@ -155,6 +162,7 @@ export default function Pantheos() {
         </div>
 
         {searchOpen && <SearchPalette onClose={() => setSearchOpen(false)} />}
+        {newTicketOpen && <NewTicketModal onClose={() => setNewTicketOpen(false)} />}
         {toasts.length > 0 && (
           <div className="gs-toasts">
             {toasts.map((t) => (

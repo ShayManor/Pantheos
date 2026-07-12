@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import { useNav } from "../nav.jsx";
 import { LifePill } from "../components/pills.jsx";
-import { autoLabel, LINK_ICON, LINK_KIND } from "../lib/helpers.js";
+import { autoLabel, linkHref, LINK_ICON, LINK_KIND, openExternal } from "../lib/helpers.js";
 
 export default function TicketDetail({ id }) {
   const { go, tickets, launchTicket, setLifecycle, setFilter, toast, projects } = useNav();
@@ -103,12 +103,19 @@ export default function TicketDetail({ id }) {
             <div className="gs-section-h" style={{ marginBottom: 11 }}><Link2 size={12} />LINKS</div>
             {t.links.map((l, i) => {
               const I = LINK_ICON[l.kind] || Link2;
-              return (
-                <div key={i} className="gs-link" onClick={() => toast(`Opening ${l.label}`)}>
+              const href = linkHref(l, t, projects);
+              const inner = (
+                <>
                   <span className={`pill ${LINK_KIND[l.kind] || "neu"}`} style={{ padding: 4, borderRadius: 6 }}><I size={12} /></span>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.label}</span>
                   <ChevronRight size={14} color="var(--ink-3)" style={{ marginLeft: "auto" }} />
-                </div>
+                </>
+              );
+              return href ? (
+                <a key={i} className="gs-link" href={href} target="_blank" rel="noopener noreferrer"
+                   style={{ textDecoration: "none", color: "inherit" }}>{inner}</a>
+              ) : (
+                <div key={i} className="gs-link" onClick={() => toast(`Opening ${l.label}`)}>{inner}</div>
               );
             })}
           </div>

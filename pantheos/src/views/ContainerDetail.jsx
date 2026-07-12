@@ -3,7 +3,7 @@ import { Activity, AlertTriangle, Boxes, ChevronRight, SignalZero, Terminal } fr
 import { useNav } from "../nav.jsx";
 import { StatusPill } from "../components/pills.jsx";
 import AreaSpark from "../components/AreaSpark.jsx";
-import { registryUrl } from "../lib/helpers.js";
+import { openExternal, registryUrl } from "../lib/helpers.js";
 import { api } from "../api.js";
 
 export default function ContainerDetail({ id }) {
@@ -28,7 +28,7 @@ export default function ContainerDetail({ id }) {
         <h1 className="gs-h1" style={{ margin: 0 }}>{c.id}</h1><StatusPill s={c.status} />
       </div>
       <p className="gs-sub" style={{ fontFamily: "var(--mono)", fontSize: 12 }}>
-        <span className="gs-ref" onClick={() => toast(`Opening ${registryUrl(c.image)}`)}>{c.image}</span>
+        <span className="gs-ref" onClick={() => openExternal(registryUrl(c.image))}>{c.image}</span>
       </p>
 
       {c.status === "flt" && relTicket && (
@@ -71,12 +71,12 @@ export default function ContainerDetail({ id }) {
           <span className="gs-meta-v gs-linkable" onClick={() => go({ view: "monitor", hostId: c.host })}>{h.name} ›</span></div>
         <div className="gs-meta-row"><span className="gs-meta-k">role</span><span className="gs-meta-v">{c.role}</span></div>
         <div className="gs-meta-row"><span className="gs-meta-k">image</span>
-          <span className="gs-meta-v gs-linkable" onClick={() => toast(`Opening ${registryUrl(c.image)}`)}>{c.image} ↗</span></div>
+          <span className="gs-meta-v gs-linkable" onClick={() => openExternal(registryUrl(c.image))}>{c.image} ↗</span></div>
         <div className="gs-meta-row"><span className="gs-meta-k">restart policy</span><span className="gs-meta-v">always</span></div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
         <button className="gs-btn ghost" onClick={() => go({ view: "monitor", containerId: c.id, logs: true })}><Terminal size={15} />View logs</button>
-        <button className="gs-btn ghost" onClick={() => toast(`Opening ${registryUrl(c.image)}`)}><Boxes size={15} />Registry</button>
+        <button className="gs-btn ghost" onClick={() => openExternal(registryUrl(c.image))}><Boxes size={15} />Registry</button>
       </div>
     </>
   );
