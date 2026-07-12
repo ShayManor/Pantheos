@@ -5,7 +5,8 @@ import {
   Terminal, Trash2, Wrench, X, Zap,
 } from "lucide-react";
 import { useNav } from "../nav.jsx";
-import RichText from "../components/RichText.jsx";
+import Markdown from "../components/Markdown.jsx";
+import Thinking from "../components/Thinking.jsx";
 import { TOOLMAP } from "../lib/helpers.js";
 import { api } from "../api.js";
 
@@ -70,15 +71,27 @@ export default function FlightView() {
     ["Re-rank my queue", "Recompute importance × urgency"],
   ];
 
-  const send = (q) => {
+  const send = async (q) => {
     const text = q ?? input.trim();
     if (!text && atts.length === 0) return;
     const sent = atts;
-    setMsgs((m) => [...m, { who: "me", text: text || "(attachment)", atts: sent }]);
+    setMsgs((m) => [...m, { who: "me", text: text || "(attachment)", atts: sent },
+                          { who: "flight", text: "", reasoning: "", tools: [], live: true }]);
     setInput(""); setAtts([]); setThinking(true);
-    api.chat(text).then((r) => {
-      setThinking(false);
-      setMsgs((m) => [...m, { who: "flight", text: r.text, tools: r.tools }]);
+    const patchLast = (fn) => setMsgs((m) => m.map((x, i) => (i === m.length - 1 ? fn(x) : x)));
+    let sess = activeSess;
+    if (!sess) {
+      const s = await api.createSession(text.slice(0, 42));
+      sess = s.id;
+      setActiveSess(s.id);
+      setSessions((x) => [s, ...x]);
+    }
+    api.chatStream(sess, text, {
+      onReasoning: (d) => patchLast((x) => ({ ...x, reasoning: x.reasoning + d })),
+      onText: (d) => { setThinking(false); patchLast((x) => ({ ...x, text: x.text + d, live: false })); },
+      onTool: (t) => patchLast((x) => x.tools.includes(t.name) ? x : ({ ...x, tools: [...x.tools, t.name] })),
+      onDone: (p) => { setThinking(false); patchLast((x) => ({ ...x, text: p.text, reasoning: p.reasoning, tools: p.tools, live: false })); },
+      onError: (e) => { setThinking(false); patchLast((x) => ({ ...x, text: x.text || "⚠️ Delphi is unreachable.", live: false })); toast(e.message || "Stream error"); },
     });
   };
   const onFiles = (e) => {
@@ -112,20 +125,17 @@ export default function FlightView() {
   };
   const copy = (t) => { try { navigator.clipboard?.writeText(t); } catch (e) { /* noop */ } toast("Copied to clipboard"); };
 
-  const snapshot = () => {
-    if (msgs.length <= 1) return null;
-    const title = (msgs.find((m) => m.who === "me")?.text || "New chat").slice(0, 42);
-    return { id: activeSess || `local-${sessions.length}`, title, ts: "Just now", msgs };
-  };
   const newChat = () => {
-    const snap = snapshot();
-    if (snap) setSessions((s) => [snap, ...s.filter((x) => x.id !== snap.id)]);
-    setMsgs(msgs.slice(0, 1)); setActiveSess(null); toast("Started a new chat");
+    setActiveSess(null);
+    setMsgs([{ who: "flight", text: ctx.greeting }]);
+    toast("Started a new chat");
   };
   const loadSession = (sess) => {
-    const snap = snapshot();
-    setSessions((s) => { let n = s.filter((x) => x.id !== sess.id); if (snap) n = [snap, ...n.filter((x) => x.id !== snap.id)]; return n; });
-    setMsgs(sess.msgs); setActiveSess(sess.id); setHistOpen(false);
+    api.getSession(sess.id).then((full) => {
+      setActiveSess(full.id);
+      setMsgs(full.msgs.length ? full.msgs : [{ who: "flight", text: ctx.greeting }]);
+      setHistOpen(false);
+    });
   };
   const welcome = msgs.length <= 1;
 
@@ -159,7 +169,7 @@ export default function FlightView() {
               </div>
             </>
           )}
-          <button className="gs-hbtn icon" onClick={() => setHistOpen(true)} title="Chat history"><History size={16} /></button>
+          <button className="gs-hbtn icon" onClick={() => { api.listSessions().then(setSessions); setHistOpen(true); }} title="Chat history"><History size={16} /></button>
           <button className="gs-hbtn" onClick={newChat}><SquarePen size={15} />New</button>
           <button className="gs-hbtn icon" onClick={() => setDrawer("connectors")} title="Connectors, skills & memory"><Settings size={16} /></button>
         </div>
@@ -184,14 +194,17 @@ export default function FlightView() {
                 {m.who === "flight" ? <Radio size={15} /> : <span style={{ fontFamily: "var(--mono)", fontSize: 11 }}>S</span>}
               </div>
               <div style={{ minWidth: 0 }}>
+                {m.who === "flight" && (m.reasoning || m.live) && (
+                  <Thinking reasoning={m.reasoning} live={m.live && !m.text} />
+                )}
                 {m.tools && m.tools.length > 0 && (
                   <div className="gs-tools">
-                    {m.tools.map((tk) => { const [I, label] = TOOLMAP[tk]; return (
+                    {m.tools.map((tk) => { const [I, label] = TOOLMAP[tk] || [Wrench, tk]; return (
                       <span key={tk} className="gs-toolchip"><span className="ck"><Check size={10} /></span><I size={11} />{label}</span>
                     ); })}
                   </div>
                 )}
-                <div className="gs-bub">{m.who === "flight" ? <RichText text={m.text} /> : m.text}</div>
+                <div className="gs-bub">{m.who === "flight" ? <Markdown text={m.text} /> : m.text}</div>
                 {m.atts && m.atts.length > 0 && (
                   <div className="gs-atts" style={{ marginTop: 7, marginBottom: 0 }}>
                     {m.atts.map((a, j) => <span key={j} className="gs-att">{a.img ? <Hash size={12} /> : <FileText size={12} />}<span className="nm">{a.name}</span></span>)}
@@ -205,12 +218,6 @@ export default function FlightView() {
               </div>
             </div>
           ))}
-          {thinking && (
-            <div className="gs-msg flight">
-              <div className="gs-msg-av flight"><Radio size={15} /></div>
-              <div className="gs-bub" style={{ padding: 0 }}><div className="gs-think"><i /><i /><i /></div></div>
-            </div>
-          )}
         </div>
 
         {!welcome && (
@@ -266,9 +273,9 @@ export default function FlightView() {
                   <span className="m"><span>Current</span><span>{msgs.filter((m) => m.who === "me").length} messages</span></span>
                 </div>
               )}
-              {sessions.length === 0 && welcome
-                ? <div className="gs-empty">No past chats yet.</div>
-                : sessions.map((s) => (
+              {sessions.filter((s) => s.id !== activeSess).length === 0
+                ? (welcome ? <div className="gs-empty">No past chats yet.</div> : null)
+                : sessions.filter((s) => s.id !== activeSess).map((s) => (
                   <div key={s.id} className="gs-sess" onClick={() => loadSession(s)}>
                     <span className="t">{s.title}</span>
                     <span className="m"><span>{s.ts}</span><span>{s.msgs.filter((m) => m.who === "me").length} messages</span></span>
@@ -307,7 +314,7 @@ export default function FlightView() {
                       </div>
                       <div className="gs-conn-act">
                         <div className={`gs-switch ${s.on ? "on" : ""}`} onClick={() => toggleServer(s)} />
-                        <button className="gs-icon-btn" onClick={() => removeServer(s)}><Trash2 size={15} /></button>
+                        <button className="gs-icon-btn" title="Delete connector" onClick={() => removeServer(s)}><Trash2 size={15} /></button>
                       </div>
                     </div>
                   ))}

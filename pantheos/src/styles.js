@@ -402,4 +402,14 @@ export const CSS = `
 .gs-logline .lv.info{color:var(--info);} .gs-logline .lv.warn{color:var(--caution);} .gs-logline .lv.err{color:var(--fault);}
 .gs-logline .mg{color:var(--ink);white-space:pre-wrap;word-break:break-word;}
 .gs-follow{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--go);padding:6px 11px;border:1px solid var(--go-line);background:var(--go-soft);border-radius:20px;}
+
+/* markdown + chain-of-thought */
+.gs-cot{margin:0 0 8px}
+.gs-cot-head{display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--ink-3);font-size:12px;cursor:pointer;padding:2px 0}
+.gs-cot-head:hover{color:var(--ink-2)}
+.gs-cot-body{margin:6px 0 2px;padding:8px 12px;border-left:2px solid var(--line);color:var(--ink-2);font-size:13px}
+.gs-md p{margin:0 0 8px}.gs-md p:last-child{margin:0}
+.gs-md pre{overflow:auto;border-radius:8px;padding:10px 12px;margin:8px 0;font-family:var(--mono);font-size:12.5px}
+.gs-md code{font-family:var(--mono);font-size:12.5px}
+.gs-md table{border-collapse:collapse}.gs-md th,.gs-md td{border:1px solid var(--line);padding:4px 8px}
 `;

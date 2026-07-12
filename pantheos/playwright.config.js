@@ -16,23 +16,23 @@ export default defineConfig({
   timeout: 30000,
   expect: { timeout: 10000 },
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: "http://127.0.0.1:5173",
     trace: "off",
     ...devices["Desktop Chrome"],
   },
   webServer: [
     {
-      command: "venv/bin/python wsgi.py",
+      command: "venv/bin/python -c \"from app import create_app; create_app().run(host='127.0.0.1', port=8000, threaded=True)\"",
       cwd: apiDir,
       env: { PANTHEOS_ALLOW_RESEED: "1" },
-      url: "http://localhost:8000/api/health",
+      url: "http://127.0.0.1:8000/api/health",
       reuseExistingServer: true,
       timeout: 30000,
     },
     {
       command: "npm run dev",
       cwd: dir,
-      url: "http://localhost:5173",
+      url: "http://127.0.0.1:5173",
       reuseExistingServer: true,
       timeout: 30000,
     },

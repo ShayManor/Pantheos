@@ -240,6 +240,7 @@ class DelphiSession(Base):
     id = Column(String, primary_key=True)
     title = Column(String, nullable=False)
     ts = Column(String, nullable=False)
+    hermes_session_id = Column(String, nullable=True)
     position = Column(Integer, nullable=False, default=0)
 
     messages = relationship("DelphiMessage", cascade="all, delete-orphan",
@@ -247,6 +248,7 @@ class DelphiSession(Base):
 
     def to_dict(self):
         return {"id": self.id, "title": self.title, "ts": self.ts,
+                "hermes_session_id": self.hermes_session_id,
                 "msgs": [m.to_dict() for m in self.messages]}
 
 
@@ -256,11 +258,14 @@ class DelphiMessage(Base):
     session_id = Column(String, ForeignKey("delphi_sessions.id"), nullable=False)
     who = Column(String, nullable=False)           # me | flight
     text = Column(Text, nullable=False)
+    reasoning = Column(Text, nullable=True)
     tools = Column(JSON, nullable=True)
     position = Column(Integer, nullable=False, default=0)
 
     def to_dict(self):
         d = {"who": self.who, "text": self.text}
+        if self.reasoning:
+            d["reasoning"] = self.reasoning
         if self.tools:
             d["tools"] = self.tools
         return d

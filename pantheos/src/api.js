@@ -31,7 +31,42 @@ export const api = {
   setProjectContext: (key, context) => req("PUT", `/api/projects/${key}/context`, { context }),
 
   delphiContext: () => req("GET", "/api/delphi/context"),
-  chat: (text) => req("POST", "/api/delphi/chat", { text }),
+  createSession: (title) => req("POST", "/api/delphi/sessions", { title }),
+  listSessions: () => req("GET", "/api/delphi/sessions"),
+  getSession: (id) => req("GET", `/api/delphi/sessions/${id}`),
+  deleteSession: (id) => req("DELETE", `/api/delphi/sessions/${id}`),
+  chatStream: async (sessionId, text, h) => {
+    const res = await fetch("/api/delphi/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, text }),
+    });
+    if (!res.ok || !res.body) { h.onError?.({ message: `HTTP ${res.status}` }); return; }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let sep;
+      while ((sep = buf.indexOf("\n\n")) !== -1) {
+        const frame = buf.slice(0, sep); buf = buf.slice(sep + 2);
+        let ev = null, data = null;
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("event:")) ev = line.slice(6).trim();
+          else if (line.startsWith("data:")) data = line.slice(5).trim();
+        }
+        if (!data) continue;
+        const p = JSON.parse(data);
+        if (ev === "reasoning") h.onReasoning?.(p.delta);
+        else if (ev === "text") h.onText?.(p.delta);
+        else if (ev === "tool") h.onTool?.(p);
+        else if (ev === "done") h.onDone?.(p);
+        else if (ev === "error") h.onError?.(p);
+      }
+    }
+  },
   draftTicket: (ctx) => req("POST", "/api/delphi/draft_ticket", ctx),
   addConnector: (name, url) => req("POST", "/api/delphi/connectors", { name, url }),
   toggleConnector: (id, on) => req("PATCH", `/api/delphi/connectors/${id}`, { on }),

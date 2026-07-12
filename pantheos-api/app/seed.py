@@ -32,9 +32,12 @@ def _area_context(a):
 
 
 def reset_db(engine):
-    """Drop and recreate every table."""
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
+    """Drop and recreate every table atomically — one transaction, so a
+    concurrent reader (e.g. a lingering request from a just-closed page) never
+    sees a half-dropped schema (`relation "x" does not exist`)."""
+    with engine.begin() as conn:
+        Base.metadata.drop_all(conn)
+        Base.metadata.create_all(conn)
 
 
 def seed(session):

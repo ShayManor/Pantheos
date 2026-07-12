@@ -244,3 +244,4 @@ CLAUDE.md
 
 # Design spec stays local (markdown rule: only README.md is committed)
 docs/spec.md
+.superpowers/

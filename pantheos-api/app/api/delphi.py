@@ -1,11 +1,14 @@
+import json
 import uuid
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request, stream_with_context
 from sqlalchemy import func
 
 from . import db, get_or_404
+from .. import acp
 from .. import delphi as delphi_logic
-from ..models import AgentModel, AgentRun, DelphiSession, McpServer, MemoryFact, Skill
+from ..models import (AgentModel, AgentRun, DelphiMessage, DelphiSession,
+                      McpServer, MemoryFact, Skill)
 from ..seed_data import GREETING
 
 bp = Blueprint("delphi", __name__, url_prefix="/api/delphi")
@@ -34,10 +37,86 @@ def context():
     })
 
 
-@bp.post("/chat")
-def chat():
+def _tail_position(model):
+    """One above the current maximum, so a row sorts to the end."""
+    return (db().query(func.max(model.position)).scalar() or 0) + 1
+
+
+@bp.get("/health")
+def health():
+    import os
+    return jsonify({"mode": os.environ.get("DELPHI_ACP_MODE", "mock"), "ok": True})
+
+
+@bp.post("/sessions")
+def create_session():
     data = request.get_json(silent=True) or {}
-    return jsonify(delphi_logic.reply(data.get("text", "")))
+    title = (data.get("title") or "New chat").strip() or "New chat"
+    sess = DelphiSession(id=_new_id(), title=title, ts="Just now",
+                         position=_front_position(DelphiSession))
+    db().add(sess)
+    db().commit()
+    return jsonify(sess.to_dict()), 201
+
+
+@bp.get("/sessions")
+def list_sessions():
+    rows = db().query(DelphiSession).order_by(DelphiSession.position)
+    return jsonify([s.to_dict() for s in rows])
+
+
+@bp.get("/sessions/<sid>")
+def get_session(sid):
+    return jsonify(get_or_404(DelphiSession, sid).to_dict())
+
+
+@bp.delete("/sessions/<sid>")
+def delete_session(sid):
+    sess = get_or_404(DelphiSession, sid)
+    db().delete(sess)
+    db().commit()
+    return jsonify({"status": "deleted"})
+
+
+@bp.post("/chat/stream")
+def chat_stream():
+    data = request.get_json(silent=True) or {}
+    sess = get_or_404(DelphiSession, data.get("session_id"))
+    text = (data.get("text") or "").strip()
+    # Captured before the commit below expires `sess`: the streaming generator
+    # resumes after the request context has been torn down and re-pushed by
+    # stream_with_context, by which point ORM attribute access on `sess`
+    # would raise DetachedInstanceError.
+    sess_id = sess.id
+    hermes_session_id = sess.hermes_session_id
+
+    # Persist the user turn immediately.
+    db().add(DelphiMessage(session_id=sess_id, who="me", text=text,
+                           position=_tail_position(DelphiMessage)))
+    db().commit()
+
+    def generate():
+        final = None
+        try:
+            for ev in acp.run_turn(text, hermes_session_id):
+                if ev["type"] == "done":
+                    final = ev
+                yield f"event: {ev['type']}\ndata: {json.dumps(ev)}\n\n"
+        except Exception as exc:  # surface transport failures to the UI
+            err = {"type": "error", "message": str(exc)}
+            yield f"event: error\ndata: {json.dumps(err)}\n\n"
+        # Persist the assistant turn (whatever completed).
+        if final is not None:
+            if final.get("hermes_session_id"):
+                db().get(DelphiSession, sess_id).hermes_session_id = final["hermes_session_id"]
+            db().add(DelphiMessage(
+                session_id=sess_id, who="flight", text=final["text"],
+                reasoning=final.get("reasoning") or None,
+                tools=final.get("tools") or None,
+                position=_tail_position(DelphiMessage)))
+            db().commit()
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
 
 @bp.post("/draft_ticket")

@@ -1,19 +1,41 @@
 import { test, expect, navTo } from "./utils.js";
 
-test("delphi greets and replies to a suggestion with tool chips", async ({ page }) => {
+test("delphi streams a markdown answer with chain-of-thought and tools", async ({ page }) => {
   await navTo(page, "Delphi");
-  await expect(page.getByRole("heading", { name: "Talk to Delphi" })).toBeVisible();
-  await page.locator(".gs-sugg button", { hasText: "What's due this week?" }).click();
-  await expect(page.locator(".gs-bub").filter({ hasText: "This week:" })).toBeVisible();
+  await expect(page.getByText("Talk to Delphi")).toBeVisible();
+
+  await page.getByPlaceholder(/Ask Delphi/).fill("What is due this week?");
+  await page.getByPlaceholder(/Ask Delphi/).press("Enter");
+
+  // Streamed answer renders as markdown (bold + code + KaTeX).
+  const bubble = page.locator(".gs-msg.flight .gs-md").last();
+  await expect(bubble.locator("strong")).toContainText("Priority math");
+  await expect(bubble.locator("code").first()).toBeVisible();
+  await expect(bubble.locator(".katex").first()).toBeVisible();
+
+  // Chain-of-thought panel expands on click.
+  const cot = page.locator(".gs-cot").last();
+  await expect(cot.locator(".gs-cot-head")).toContainText("Thought process");
+  await cot.locator(".gs-cot-head").click();
+  await expect(cot.locator(".gs-cot-body")).toContainText("highest-leverage");
+
+  // Tool chips surfaced.
   await expect(page.locator(".gs-toolchip", { hasText: "Calendar" })).toBeVisible();
+
+  // Ticket ref inside markdown is clickable.
+  await expect(bubble.locator(".gs-ref", { hasText: "GRD-0182" })).toBeVisible();
 });
 
-test("delphi free-text chat routes to the gh-stats answer", async ({ page }) => {
+test("delphi history persists across reload", async ({ page }) => {
   await navTo(page, "Delphi");
-  await page.getByPlaceholder("Ask Delphi, attach a file, or dictate…").fill("did the gh-stats fix pass canary");
-  await page.getByPlaceholder("Ask Delphi, attach a file, or dictate…").press("Enter");
-  await expect(page.locator(".gs-bub").filter({ hasText: "5XX hit 6.1%" })).toBeVisible();
-  await expect(page.locator(".gs-toolchip", { hasText: "GitHub" })).toBeVisible();
+  await page.getByPlaceholder(/Ask Delphi/).fill("Status of MERLIN");
+  await page.getByPlaceholder(/Ask Delphi/).press("Enter");
+  await expect(page.locator(".gs-msg.flight .gs-md").last()).toContainText("MERLIN");
+
+  await page.reload();
+  await navTo(page, "Delphi");
+  await page.getByTitle("Chat history").click();
+  await expect(page.locator(".gs-sess")).toContainText(["Status of MERLIN"]);
 });
 
 test("connectors: add, toggle and delete", async ({ page }) => {
@@ -32,8 +54,10 @@ test("connectors: add, toggle and delete", async ({ page }) => {
   await github.locator(".gs-switch").click();
   await expect(github.locator(".gs-switch")).not.toHaveClass(/on/);
 
-  await page.locator(".gs-conn", { hasText: "TestConn" }).locator(".gs-icon-btn").click();
-  await expect(page.locator(".gs-conn", { hasText: "TestConn" })).toHaveCount(0);
+  const testConn = page.locator(".gs-conn", { hasText: "TestConn" });
+  await expect(testConn).toHaveCount(1);
+  await testConn.getByTitle("Delete connector").click();
+  await expect(testConn).toHaveCount(0);
 });
 
 test("skills and memory tabs render", async ({ page }) => {

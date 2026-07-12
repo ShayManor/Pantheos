@@ -10,9 +10,11 @@ test("edit and save a project's context, and it persists", async ({ page }) => {
   await box.fill("# gh-stats\n\nAlways run the linter before pushing.");
   await page.getByRole("button", { name: "Save context" }).click();
   await expect(page.locator(".gs-toast")).toContainText("Saved context");
+  await expect(page.locator(".gs-overlay")).toHaveCount(0); // modal fully closed before reopening
 
   // reopen → the edit persisted
   await page.getByRole("button", { name: "Context" }).click();
+  await expect(page.locator("textarea")).not.toHaveValue("Loading…");
   await expect(page.locator("textarea")).toHaveValue("# gh-stats\n\nAlways run the linter before pushing.");
 });
 
