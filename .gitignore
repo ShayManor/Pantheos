@@ -216,3 +216,30 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Pantheos ---
+# Backend virtualenv (pantheos-api)
+pantheos-api/venv/
+pantheos-api/.pytest_cache/
+# Node / Vite (pantheos frontend)
+pantheos/node_modules/
+pantheos/dist/
+# Playwright
+pantheos/test-results/
+pantheos/playwright-report/
+pantheos/.playwright-mcp/
+.playwright-mcp/
+# Coverage
+.coverage
+# IDE
+.idea/
+# Working docs (only README.md is ever committed)
+docs/SPEC.md
+docs/IMPLEMENTATION.md
+# Agent-facing notes
+CLAUDE.md
+# Scratch screenshots
+*.png
+
+# Design spec stays local (markdown rule: only README.md is committed)
+docs/spec.md
