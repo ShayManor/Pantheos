@@ -7,6 +7,30 @@ from .models import (
 )
 
 
+_CEILINGS = {
+    "propose": "Branch + PR only — never touch main; hard-stop at needs_review.",
+    "auto_pr": "Commit + PR; self-merge only on green CI.",
+    "full": "Commit to main; self-archive on completion.",
+}
+
+
+def _project_context(p):
+    return (
+        f"# {p['name']}\n\n{p['blurb']}\n\n"
+        f"## Autonomy\n{p['autonomy']} — {_CEILINGS[p['autonomy']]}\n\n"
+        f"## Repo\n{p['repo'] or '—'}\n\n"
+        f"## Notes\n- Add project-specific conventions and guardrails here.\n"
+    )
+
+
+def _area_context(a):
+    return (
+        f"# {a['name']}\n\n"
+        f"Working context for the {a['name']} area ({a['kind']}).\n\n"
+        f"## Notes\n- Shared conventions across every project and ticket in this area.\n"
+    )
+
+
 def reset_db(engine):
     """Drop and recreate every table."""
     Base.metadata.drop_all(engine)
@@ -16,13 +40,14 @@ def reset_db(engine):
 def seed(session):
     """Insert the full mock dataset into empty tables."""
     for i, a in enumerate(S.AREAS):
-        session.add(Area(id=a["id"], name=a["name"], kind=a["kind"], active=True, position=i))
+        session.add(Area(id=a["id"], name=a["name"], kind=a["kind"], active=True,
+                        context=_area_context(a), position=i))
     session.flush()
 
     for i, p in enumerate(S.PROJECTS):
         session.add(Project(key=p["key"], area_id=p["area_id"], name=p["name"],
                             autonomy=p["autonomy"], status=p["status"], users=p["users"],
-                            blurb=p["blurb"], repo=p["repo"], position=i))
+                            blurb=p["blurb"], repo=p["repo"], context=_project_context(p), position=i))
     session.flush()
 
     rows = [{"id": t["id"], "pri": t["pri"], "deadline_hours": t["deadline_hours"],

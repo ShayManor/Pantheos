@@ -236,6 +236,7 @@ pantheos/.playwright-mcp/
 # Working docs (only README.md is ever committed)
 docs/SPEC.md
 docs/IMPLEMENTATION.md
+docs/superpowers/
 # Agent-facing notes
 CLAUDE.md
 # Scratch screenshots

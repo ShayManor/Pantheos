@@ -40,6 +40,12 @@ def chat():
     return jsonify(delphi_logic.reply(data.get("text", "")))
 
 
+@bp.post("/draft_ticket")
+def draft_ticket():
+    data = request.get_json(silent=True) or {}
+    return jsonify(delphi_logic.draft_ticket(data))
+
+
 # ------------------------------------------------------------- connectors
 @bp.post("/connectors")
 def add_connector():

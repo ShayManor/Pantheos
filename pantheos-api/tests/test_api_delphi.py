@@ -18,6 +18,16 @@ def test_chat(client):
     assert client.post("/api/delphi/chat", json={}).get_json()["tools"] == []
 
 
+def test_draft_ticket(client):
+    r = client.post("/api/delphi/draft_ticket", json={"title": "port to rubik pi"})
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d["project_key"] == "merlin"
+    assert d["summary"]
+    # empty body still returns a usable draft
+    assert client.post("/api/delphi/draft_ticket", json={}).get_json()["title"]
+
+
 def test_connector_crud(client):
     r = client.post("/api/delphi/connectors", json={"name": "MyConn"})
     assert r.status_code == 201

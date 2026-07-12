@@ -21,6 +21,7 @@ class Area(Base):
     name = Column(String, nullable=False)
     kind = Column(String, nullable=False)          # lab | club | class | personal
     active = Column(Boolean, nullable=False, default=True)
+    context = Column(Text, nullable=True)          # per-area CLAUDE.md (agent context)
     position = Column(Integer, nullable=False, default=0)
 
     def to_dict(self):
@@ -37,6 +38,7 @@ class Project(Base):
     users = Column(Integer, nullable=True)
     blurb = Column(Text, nullable=False)
     repo = Column(String, nullable=True)
+    context = Column(Text, nullable=True)          # per-project CLAUDE.md (agent context)
     position = Column(Integer, nullable=False, default=0)
 
     area = relationship("Area")

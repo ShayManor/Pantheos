@@ -22,6 +22,26 @@ test("create a ticket via the modal", async ({ page }) => {
   await expect(page.locator(".gs-trow", { hasText: "Wire up OAuth" })).toBeVisible();
 });
 
+test("Delphi drafts the ticket live, then the user edits and creates", async ({ page }) => {
+  await page.getByRole("button", { name: "New ticket" }).click();
+  await page.getByPlaceholder("What needs doing?").fill("port to rubik pi");
+
+  await page.getByRole("button", { name: "Call Delphi" }).click();
+
+  // Delphi overwrites the form with a full draft (fields fill live)
+  await expect(page.getByPlaceholder("What needs doing?")).toHaveValue("Port MERLIN inference to Rubik Pi");
+  await expect(page.locator(".gs-pal select").first()).toHaveValue("project:merlin");
+  await expect(page.locator(".gs-pal select").nth(2)).toHaveValue("168"); // deadline: this week
+  await expect(page.getByPlaceholder("One line — what this ticket is")).not.toHaveValue("");
+
+  // the user tweaks the draft, then creates
+  await page.getByPlaceholder("What needs doing?").fill("Port MERLIN inference to Rubik Pi 5");
+  await page.getByRole("button", { name: "Create ticket" }).click();
+
+  await expect(page.getByRole("heading", { name: "Port MERLIN inference to Rubik Pi 5" })).toBeVisible();
+  await expect(page.locator(".gs-toast")).toContainText("Created");
+});
+
 test("the new-ticket create button is disabled until a title is entered", async ({ page }) => {
   await page.getByRole("button", { name: "New ticket" }).click();
   await expect(page.getByRole("button", { name: "Create ticket" })).toBeDisabled();

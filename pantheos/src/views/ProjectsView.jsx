@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, GitBranch, Gauge, ListChecks, Satellite, Server } from "lucide-react";
+import { Activity, FileText, GitBranch, Gauge, ListChecks, Satellite, Server } from "lucide-react";
 import { useNav } from "../nav.jsx";
 import { StatusPill } from "../components/pills.jsx";
 import TicketRow from "../components/TicketRow.jsx";
@@ -15,46 +15,56 @@ export function UsersChart() {
 }
 
 export default function ProjectsView() {
-  const { go, tickets, projects } = useNav();
+  const { go, tickets, projects, areas, openContext } = useNav();
   const entries = Object.entries(projects);
-  const areas = [...new Set(entries.map(([, p]) => p.area))];
   return (
     <>
       <div className="gs-eyebrow"><Satellite size={13} />STATION · PROJECTS</div>
       <h1 className="gs-h1">Projects</h1>
-      {areas.map((area) => (
-        <div key={area} style={{ marginBottom: 26 }}>
-          <div className="gs-eyebrow" style={{ marginBottom: 12 }}>{area}</div>
-          <div className="gs-grid">
-            {entries.filter(([, p]) => p.area === area).map(([k, p]) => {
-              const open = tickets.filter((t) => t.proj === k && t.life !== "archived").length;
-              return (
-                <div key={k} className="gs-card gs-pcard" onClick={() => go({ view: "projects", projectId: k })}>
-                  <div className="gs-pcard-top">
-                    <div><div className="gs-pcard-nm">{p.name}</div><div className="gs-pcard-area">{autoLabel(p.autonomy).toUpperCase()}</div></div>
-                    <StatusPill s={p.status} />
-                  </div>
-                  <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>{p.blurb}</div>
-                  <div className="gs-pcard-metrics">
-                    <div className="gs-metric"><div className="v">{open}</div><div className="l">OPEN TICKETS</div></div>
-                    {p.users != null ? (
-                      <div className="gs-metric"><div className="v">{p.users.toLocaleString()}</div><div className="l">USERS · 7D</div></div>
-                    ) : (
-                      <div className="gs-metric"><div className="v" style={{ color: "var(--ink-3)" }}>—</div><div className="l">NO ANALYTICS</div></div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+      {areas.map((area) => {
+        const areaProjects = entries.filter(([, p]) => p.area === area.name);
+        return (
+          <div key={area.id} style={{ marginBottom: 26 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <div className="gs-eyebrow" style={{ margin: 0 }}>{area.name}</div>
+              <button className="gs-hbtn icon" style={{ marginLeft: "auto" }} title="Edit area context"
+                onClick={() => openContext("area", area.id, area.name)}><FileText size={14} /></button>
+            </div>
+            {areaProjects.length === 0 ? (
+              <div className="gs-card gs-empty" style={{ padding: "22px 20px" }}>No projects in this area.</div>
+            ) : (
+              <div className="gs-grid">
+                {areaProjects.map(([k, p]) => {
+                  const open = tickets.filter((t) => t.proj === k && t.life !== "archived").length;
+                  return (
+                    <div key={k} className="gs-card gs-pcard" onClick={() => go({ view: "projects", projectId: k })}>
+                      <div className="gs-pcard-top">
+                        <div><div className="gs-pcard-nm">{p.name}</div><div className="gs-pcard-area">{autoLabel(p.autonomy).toUpperCase()}</div></div>
+                        <StatusPill s={p.status} />
+                      </div>
+                      <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>{p.blurb}</div>
+                      <div className="gs-pcard-metrics">
+                        <div className="gs-metric"><div className="v">{open}</div><div className="l">OPEN TICKETS</div></div>
+                        {p.users != null ? (
+                          <div className="gs-metric"><div className="v">{p.users.toLocaleString()}</div><div className="l">USERS · 7D</div></div>
+                        ) : (
+                          <div className="gs-metric"><div className="v" style={{ color: "var(--ink-3)" }}>—</div><div className="l">NO ANALYTICS</div></div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 }
 
 export function ProjectDetail({ pk }) {
-  const { go, tickets, toast, projects, containers } = useNav();
+  const { go, tickets, projects, containers, openContext } = useNav();
   const p = projects[pk];
   const tix = tickets.filter((t) => t.proj === pk);
   const conts = containers.filter((c) => c.proj === pk);
@@ -64,6 +74,7 @@ export function ProjectDetail({ pk }) {
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
         <h1 className="gs-h1" style={{ margin: 0 }}>{p.name}</h1><StatusPill s={p.status} />
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <button className="gs-btn ghost" onClick={() => openContext("project", pk, p.name)}><FileText size={14} />Context</button>
           {p.repo && <button className="gs-btn ghost" onClick={() => openExternal(repoUrl(p.repo))}><GitBranch size={14} />Repo</button>}
           {conts.length > 0 && <button className="gs-btn ghost" onClick={() => go({ view: "monitor", projectId: pk })}><Gauge size={14} />Monitor</button>}
         </div>

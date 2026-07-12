@@ -13,6 +13,7 @@ import ContainerLogs from "./views/ContainerLogs.jsx";
 import FlightView from "./views/FlightView.jsx";
 import SearchPalette from "./components/SearchPalette.jsx";
 import NewTicketModal from "./components/NewTicketModal.jsx";
+import ContextEditor from "./components/ContextEditor.jsx";
 
 export default function Pantheos() {
   const [ready, setReady] = useState(false);
@@ -28,6 +29,7 @@ export default function Pantheos() {
   const [toasts, setToasts] = useState([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [newTicketOpen, setNewTicketOpen] = useState(false);
+  const [contextTarget, setContextTarget] = useState(null);
   const [met, setMet] = useState(15153);
 
   useEffect(() => {
@@ -67,6 +69,7 @@ export default function Pantheos() {
   const createTicket = (payload) =>
     api.createTicket(payload).then((ticket) => { setTickets((ts) => [...ts, ticket]); return ticket; });
   const openNewTicket = () => setNewTicketOpen(true);
+  const openContext = (kind, id, name) => setContextTarget({ kind, id, name });
 
   const nav = [
     { k: "queue", label: "Queue", icon: ListChecks, cnt: tickets.filter((t) => t.life !== "archived").length },
@@ -84,7 +87,7 @@ export default function Pantheos() {
   }, [searchOpen]);
 
   const apiCtx = { go, back, root, toast, tickets, launchTicket, setLifecycle, createTicket, openNewTicket,
-    filter, setFilter, projects, hosts, containers, areas };
+    openContext, filter, setFilter, projects, hosts, containers, areas };
 
   const section = cur.ticketId ? "queue" : cur.view;
   const secName = { queue: "Queue", projects: "Projects", monitor: "Monitor", flight: "Delphi" }[section] || "Queue";
@@ -163,6 +166,7 @@ export default function Pantheos() {
 
         {searchOpen && <SearchPalette onClose={() => setSearchOpen(false)} />}
         {newTicketOpen && <NewTicketModal onClose={() => setNewTicketOpen(false)} />}
+        {contextTarget && <ContextEditor target={contextTarget} onClose={() => setContextTarget(null)} />}
         {toasts.length > 0 && (
           <div className="gs-toasts">
             {toasts.map((t) => (

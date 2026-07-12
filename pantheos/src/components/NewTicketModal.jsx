@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ListChecks, Plus, X } from "lucide-react";
+import { ListChecks, Plus, Sparkles, X } from "lucide-react";
 import { useNav } from "../nav.jsx";
+import { api } from "../api.js";
 
 const DEADLINES = [
   ["", "No deadline"],
@@ -23,6 +24,37 @@ export default function NewTicketModal({ onClose }) {
   const [deadline, setDeadline] = useState("");
   const [summary, setSummary] = useState("");
   const [busy, setBusy] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+
+  // Ask Delphi to enrich whatever's filled in into a full ticket, then fill the
+  // form live (field by field) so the user can edit the draft before creating.
+  const callDelphi = () => {
+    if (busy || drafting) return;
+    const [kind, id] = attach.split(":");
+    const ctx = { title: title.trim(), summary: summary.trim(), pri };
+    if (kind === "project") ctx.project_key = id;
+    else if (kind === "area") ctx.area_id = id;
+    if (effort) ctx.effort_hours = Number(effort);
+    if (deadline) ctx.deadline_hours = Number(deadline);
+    setDrafting(true);
+    api.draftTicket(ctx)
+      .then((d) => {
+        const fills = [
+          () => setTitle(d.title ?? ""),
+          () => {
+            if (d.project_key) setAttach(`project:${d.project_key}`);
+            else if (d.area_id) setAttach(`area:${d.area_id}`);
+          },
+          () => { if (d.pri != null) setPri(d.pri); },
+          () => setDeadline(d.deadline_hours != null ? String(d.deadline_hours) : ""),
+          () => setEffort(d.effort_hours != null ? String(d.effort_hours) : ""),
+          () => setSummary(d.summary ?? ""),
+        ];
+        fills.forEach((fn, i) => setTimeout(fn, i * 120));
+        setTimeout(() => setDrafting(false), fills.length * 120);
+      })
+      .catch(() => { toast("Delphi couldn't draft that"); setDrafting(false); });
+  };
 
   const submit = () => {
     const t = title.trim();
@@ -99,11 +131,16 @@ export default function NewTicketModal({ onClose }) {
               onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="One line — what this ticket is" />
           </div>
 
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-            <button className="gs-btn ghost" onClick={onClose}>Cancel</button>
-            <button className="gs-btn primary" onClick={submit} disabled={!title.trim() || busy}>
-              <Plus size={15} />Create ticket
+          <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+            <button className="gs-btn ghost" onClick={callDelphi} disabled={busy || drafting}>
+              <Sparkles size={15} color="var(--go)" />{drafting ? "Delphi drafting…" : "Call Delphi"}
             </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="gs-btn ghost" onClick={onClose}>Cancel</button>
+              <button className="gs-btn primary" onClick={submit} disabled={!title.trim() || busy}>
+                <Plus size={15} />Create ticket
+              </button>
+            </div>
           </div>
         </div>
       </div>
