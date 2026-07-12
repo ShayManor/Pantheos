@@ -245,3 +245,6 @@ CLAUDE.md
 # Design spec stays local (markdown rule: only README.md is committed)
 docs/spec.md
 .superpowers/
+
+# Frontend source dir wrongly caught by the Python-template "lib/" rule above.
+!pantheos/src/lib/
