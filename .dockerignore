@@ -1,0 +1,17 @@
+# Keep the build context small — these are rebuilt inside the image or irrelevant.
+.git
+**/venv
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/test-results
+**/playwright-report
+**/.playwright-mcp
+.superpowers
+docs
+*.log
+.coverage
+.idea
+code.jsx

@@ -30,3 +30,21 @@ def test_reseed_forbidden():
         assert app.test_client().post("/api/admin/reseed").status_code == 403
     finally:
         app.db_engine.dispose()
+
+
+def test_frontend_static_serving(tmp_path):
+    """When FRONTEND_DIST is set, Flask serves the SPA at / while the API keeps
+    priority (unmatched /api/* still 404s as JSON, not the index page)."""
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><title>Pantheos</title>")
+    (dist / "assets" / "app.js").write_text("console.log('hi')")
+    app = create_app({"DATABASE_URL": TEST_DB, "FRONTEND_DIST": str(dist)})
+    c = app.test_client()
+    assert b"Pantheos" in c.get("/").data                       # index at /
+    assert b"console.log" in c.get("/assets/app.js").data       # real asset
+    assert b"Pantheos" in c.get("/unknown/route").data          # SPA fallback
+    r = c.get("/api/does-not-exist")                            # API keeps priority
+    assert r.status_code == 404 and r.is_json
+    app.db_session.remove()
+    app.db_engine.dispose()

@@ -1,5 +1,7 @@
 """Flask application factory."""
-from flask import Flask, jsonify
+import os
+
+from flask import Flask, abort, jsonify, send_from_directory
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
@@ -32,4 +34,22 @@ def create_app(overrides=None):
         return jsonify({"status": "ok"})
 
     register_blueprints(app)
+
+    # Serve the built frontend at "/" when a dist path is configured (container
+    # deploy). The API keeps priority: registered /api/* rules match first, and
+    # unmatched /api/* paths 404 as JSON rather than falling through to index.
+    dist = app.config.get("FRONTEND_DIST")
+    if dist:
+        @app.get("/")
+        def index():
+            return send_from_directory(dist, "index.html")
+
+        @app.get("/<path:filename>")
+        def spa(filename):
+            if filename.startswith("api/"):
+                abort(404)
+            if os.path.isfile(os.path.join(dist, filename)):
+                return send_from_directory(dist, filename)
+            return send_from_directory(dist, "index.html")
+
     return app

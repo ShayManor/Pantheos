@@ -1,0 +1,48 @@
+# Pantheos on the minipc: one app container (Flask API + built frontend at /)
+# plus a Postgres container. The app reaches the host's Hermes agent over SSH.
+#
+#   docker compose up -d          # pulls ghcr.io/shaymanor/pantheos:latest
+#   open http://<minipc>:8000/    # frontend at /, API at /api
+#
+# Real agent mode (DELPHI_ACP_MODE=acp) needs the container to `ssh minipc` into
+# the host and run `hermes acp`. That requires: (1) the host can `ssh minipc`
+# itself (its own pubkey in ~/.ssh/authorized_keys), and (2) ~/.ssh is mounted
+# below. If SSH isn't wired yet, the chat degrades gracefully (an error bubble);
+# set DELPHI_ACP_MODE=mock for the deterministic stub instead.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pantheos
+      POSTGRES_PASSWORD: pantheos
+      POSTGRES_DB: pantheos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"   # host-local only; the host-networked app connects here
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pantheos"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  app:
+    image: ghcr.io/shaymanor/pantheos:latest
+    # build: .   # uncomment to build locally instead of pulling from GHCR
+    network_mode: host        # so `ssh minipc` resolves via tailscale and the app serves on :8000
+    environment:
+      PANTHEOS_DATABASE_URL: postgresql+psycopg://pantheos:pantheos@127.0.0.1:5432/pantheos
+      PANTHEOS_ALLOW_RESEED: "0"
+      DELPHI_ACP_MODE: acp
+      # DELPHI_ACP_CMD default is: ssh minipc "bash -lc 'hermes acp'"
+    volumes:
+      - ${HOME}/.ssh:/root/.ssh:ro   # key/config to reach the host's hermes over SSH
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
