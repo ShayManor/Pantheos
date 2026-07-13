@@ -20,8 +20,7 @@ export const CSS = `
 .gs ::selection{background:var(--go-soft);}
 
 /* layout */
-.gs-shell{display:flex;min-height:640px;height:88vh;background:var(--paper);
-  border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+.gs-shell{display:flex;height:100vh;background:var(--paper);overflow:hidden;}
 .gs-rail{width:212px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--line);
   display:flex;flex-direction:column;}
 .gs-main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;}
