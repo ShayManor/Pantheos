@@ -117,7 +117,13 @@ export default function Pantheos() {
         <div className="gs-shell">
           <aside className="gs-rail">
             <div className="gs-brand" style={{ cursor: "pointer" }} onClick={() => root("queue")}>
-              <div className="gs-brand-mark"><Satellite size={17} /></div>
+              <div className="gs-brand-mark">
+                <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+                  <path d="M16 4 27.5 11.5 4.5 11.5Z" fill="#1F9D62" />
+                  <rect x="8" y="12.4" width="4.6" height="15.2" fill="#fff" />
+                  <rect x="19.4" y="12.4" width="4.6" height="15.2" fill="#fff" />
+                </svg>
+              </div>
               <div><div className="gs-brand-name">Pantheos</div><div className="gs-brand-sub">LIFE OS</div></div>
             </div>
             <nav className="gs-nav">
