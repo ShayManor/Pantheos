@@ -7,6 +7,16 @@ set -euo pipefail
 COMPOSE_DIR="${PANTHEOS_COMPOSE_DIR:-$HOME/pantheos}"
 cd "$COMPOSE_DIR"
 
+# Wire the OpenAI key (passed by the deploy job from a GitHub Actions secret)
+# into the stack via a gitignored .env that compose interpolates as
+# ${OPENAI_API_KEY}. Only that line is managed, and the value is never echoed.
+if [ -n "${OPENAI_API_KEY:-}" ]; then
+  umask 077
+  { grep -v '^OPENAI_API_KEY=' .env 2>/dev/null || true; printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"; } > .env.new
+  mv .env.new .env
+  echo "==> Updated OPENAI_API_KEY in $COMPOSE_DIR/.env"
+fi
+
 echo "==> Pulling new image(s) for the stack in $COMPOSE_DIR"
 docker compose pull
 
