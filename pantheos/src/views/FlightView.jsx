@@ -92,7 +92,7 @@ export default function FlightView() {
       onTool: (t) => patchLast((x) => x.tools.includes(t.name) ? x : ({ ...x, tools: [...x.tools, t.name] })),
       onDone: (p) => { setThinking(false); patchLast((x) => ({ ...x, text: p.text, reasoning: p.reasoning, tools: p.tools, live: false })); },
       onError: (e) => { setThinking(false); patchLast((x) => ({ ...x, text: x.text || "⚠️ Delphi is unreachable.", live: false })); toast(e.message || "Stream error"); },
-    });
+    }, model?.id);
   };
   const onFiles = (e) => {
     const picked = Array.from(e.target.files || []).map((f) => ({ name: f.name, img: f.type.startsWith("image/") }));

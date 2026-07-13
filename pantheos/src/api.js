@@ -35,11 +35,11 @@ export const api = {
   listSessions: () => req("GET", "/api/delphi/sessions"),
   getSession: (id) => req("GET", `/api/delphi/sessions/${id}`),
   deleteSession: (id) => req("DELETE", `/api/delphi/sessions/${id}`),
-  chatStream: async (sessionId, text, h) => {
+  chatStream: async (sessionId, text, h, model) => {
     const res = await fetch("/api/delphi/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId, text }),
+      body: JSON.stringify({ session_id: sessionId, text, model }),
     });
     if (!res.ok || !res.body) { h.onError?.({ message: `HTTP ${res.status}` }); return; }
     const reader = res.body.getReader();

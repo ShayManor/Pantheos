@@ -72,9 +72,9 @@ test("skills and memory tabs render", async ({ page }) => {
 
 test("switching the agent model updates the selector", async ({ page }) => {
   await navTo(page, "Delphi");
-  await expect(page.locator(".gs-model")).toContainText("Hermes 4 70B");
+  await expect(page.locator(".gs-model")).toContainText("GPT Terra");
   await page.locator(".gs-model").click();
-  await page.locator(".gs-menu-item", { hasText: "Claude Opus 4.8" }).click();
-  await expect(page.locator(".gs-model")).toContainText("Claude Opus 4.8");
-  await expect(page.locator(".gs-toast")).toContainText("Switched to Claude Opus 4.8");
+  await page.locator(".gs-menu-item", { hasText: "GPT Luna" }).click();
+  await expect(page.locator(".gs-model")).toContainText("GPT Luna");
+  await expect(page.locator(".gs-toast")).toContainText("Switched to GPT Luna");
 });

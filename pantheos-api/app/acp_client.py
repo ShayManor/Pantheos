@@ -20,7 +20,7 @@ _DEFAULT_ACP_CMD = "ssh minipc \"bash -lc 'hermes acp'\""
 _SENTINEL = object()
 
 
-def run_turn(text, hermes_session_id):
+def run_turn(text, hermes_session_id, model=None):  # model ignored: Hermes uses its own config
     """Yield normalized event dicts for one user turn."""
     q = queue.Queue()
 

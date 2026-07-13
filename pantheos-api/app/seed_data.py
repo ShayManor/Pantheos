@@ -199,11 +199,10 @@ AGENT_RUNS = [
 ]
 
 MODELS = [
-    {"id": "hermes4", "name": "Hermes 4 70B", "tag": "local · Ollama"},
-    {"id": "opus", "name": "Claude Opus 4.8", "tag": "hosted"},
-    {"id": "llama4", "name": "Llama 4 Maverick", "tag": "local · vLLM"},
-    {"id": "qwen3", "name": "Qwen3 235B", "tag": "hosted"},
-    {"id": "deepseek", "name": "DeepSeek-V3", "tag": "hosted"},
+    # id = the model string sent to the OpenAI-compatible API (chosen in the UI).
+    {"id": "gpt-5.6-terra", "name": "GPT Terra", "tag": "openai · gpt-5.6"},
+    {"id": "gpt-5.6-luna", "name": "GPT Luna", "tag": "openai · gpt-5.6"},
+    {"id": "gpt-5.6-sol", "name": "GPT Sol", "tag": "openai · gpt-5.6"},
 ]
 
 SESSIONS = [

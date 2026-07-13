@@ -83,6 +83,7 @@ def chat_stream():
     data = request.get_json(silent=True) or {}
     sess = get_or_404(DelphiSession, data.get("session_id"))
     text = (data.get("text") or "").strip()
+    model = data.get("model") or None          # UI-selected model id (openai backend)
     # Captured before the commit below expires `sess`: the streaming generator
     # resumes after the request context has been torn down and re-pushed by
     # stream_with_context, by which point ORM attribute access on `sess`
@@ -98,7 +99,7 @@ def chat_stream():
     def generate():
         final = None
         try:
-            for ev in acp.run_turn(text, hermes_session_id):
+            for ev in acp.run_turn(text, hermes_session_id, model):
                 if ev["type"] == "done":
                     final = ev
                 yield f"event: {ev['type']}\ndata: {json.dumps(ev)}\n\n"

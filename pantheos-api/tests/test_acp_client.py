@@ -13,14 +13,14 @@ def test_run_turn_selects_real_client(monkeypatch):
     monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
     called = {}
 
-    def fake(text, hsid):
-        called["args"] = (text, hsid)
+    def fake(text, hsid, model=None):
+        called["args"] = (text, hsid, model)
         yield {"type": "done", "text": "ok", "reasoning": "",
                "tools": [], "hermes_session_id": "hs1"}
 
     monkeypatch.setattr("app.acp_client.run_turn", fake)
-    out = list(acp.run_turn("hello", "hs1"))
-    assert called["args"] == ("hello", "hs1")
+    out = list(acp.run_turn("hello", "hs1", "gpt-5.6-luna"))
+    assert called["args"] == ("hello", "hs1", "gpt-5.6-luna")
     assert out[-1]["text"] == "ok"
 
 

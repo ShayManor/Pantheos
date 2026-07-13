@@ -1,6 +1,6 @@
 def test_context(client):
     d = client.get("/api/delphi/context").get_json()
-    assert len(d["models"]) == 5
+    assert len(d["models"]) == 3
     assert len(d["connectors"]) == 7
     assert len(d["skills"]) == 5
     assert len(d["memory"]) == 4
@@ -136,7 +136,7 @@ def test_chat_stream_missing_session_404(client):
 def test_chat_stream_transport_error(client, monkeypatch):
     sid = client.post("/api/delphi/sessions", json={}).get_json()["id"]
 
-    def boom(text, hermes_session_id):
+    def boom(text, hermes_session_id, model=None):
         raise RuntimeError("transport down")
 
     monkeypatch.setattr("app.acp.run_turn", boom)
