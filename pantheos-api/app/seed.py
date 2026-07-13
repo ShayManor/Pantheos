@@ -31,6 +31,21 @@ def _area_context(a):
     )
 
 
+def sync_models(session):
+    """Refresh the agent-model catalog to match the code.
+
+    Models are a fixed, non-user-editable catalog (the UI only *selects* one),
+    so replace ``agent_models`` on every boot. On an existing DB — where the
+    full seed is skipped — this keeps the selector, and the model ids sent to
+    the API, in step with the current MODELS list, instead of offering stale
+    ids the backend can no longer serve.
+    """
+    session.query(AgentModel).delete()
+    for i, mo in enumerate(S.MODELS):
+        session.add(AgentModel(id=mo["id"], name=mo["name"], tag=mo["tag"], position=i))
+    session.commit()
+
+
 def reset_db(engine):
     """Drop and recreate every table atomically — one transaction, so a
     concurrent reader (e.g. a lingering request from a just-closed page) never

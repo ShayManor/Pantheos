@@ -152,3 +152,18 @@ def test_chat_stream_transport_error(client, monkeypatch):
 def test_health(client):
     d = client.get("/api/delphi/health").get_json()
     assert d == {"mode": "mock", "ok": True}
+
+
+def test_sync_models_refreshes_stale_catalog(session):
+    from app.models import AgentModel
+    from app.seed import sync_models
+
+    # Simulate an existing DB that still holds the old model catalog.
+    session.query(AgentModel).delete()
+    session.add(AgentModel(id="hermes4", name="Hermes 4 70B", tag="old", position=0))
+    session.commit()
+
+    sync_models(session)
+
+    ids = [m.id for m in session.query(AgentModel).order_by(AgentModel.position)]
+    assert ids == ["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"]

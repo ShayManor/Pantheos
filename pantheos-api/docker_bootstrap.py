@@ -10,7 +10,7 @@ import sqlalchemy
 
 from app import create_app
 from app.models import Area, Base
-from app.seed import seed
+from app.seed import seed, sync_models
 
 app = create_app()
 
@@ -32,4 +32,8 @@ if session.query(Area).count() == 0:
     print("database seeded", flush=True)
 else:
     print("database already populated; skipping seed", flush=True)
+# Model catalog is code-defined config, not user data — refresh it every boot
+# so an existing DB doesn't keep offering stale/unservable models.
+sync_models(session)
+print("model catalog synced", flush=True)
 session.remove()
