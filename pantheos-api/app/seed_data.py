@@ -167,21 +167,17 @@ CONTAINERS = [
 
 # ---------------------------------------------------------------- Delphi config
 MCP_SERVERS = [
-    {"id": "github", "name": "GitHub", "url": "api.github.com", "tools": "8", "on": True, "desc": "Issues, PRs, CI, commits"},
-    {"id": "gcal", "name": "Google Calendar", "url": "calendarmcp.googleapis.com", "tools": "4", "on": True, "desc": "Events, free/busy, scheduling"},
-    {"id": "gmail", "name": "Gmail", "url": "gmailmcp.googleapis.com", "tools": "5", "on": True, "desc": "Starred mail → tickets"},
-    {"id": "brightspace", "name": "Brightspace", "url": "browser-agent · isolated", "tools": "3", "on": True, "desc": "Assignments + PDFs via browser session"},
-    {"id": "metrics", "name": "VictoriaMetrics", "url": "vm.minipc.local", "tools": "2", "on": True, "desc": "PromQL over fleet telemetry"},
-    {"id": "hf", "name": "Hugging Face", "url": "huggingface.co/mcp", "tools": "10", "on": False, "desc": "Models, datasets, spaces"},
-    {"id": "exa", "name": "Exa", "url": "mcp.exa.ai", "tools": "2", "on": False, "desc": "Web search + fetch"},
+    {"id": "pantheos", "name": "Pantheos", "url": "mcp.pantheos.local", "tools": "—",
+     "on": True, "desc": "Tickets, monitor, memory & Claude Code — grounded in each project's spec"},
 ]
 
 SKILLS = [
-    {"id": "enrich", "name": "enrich-ticket", "on": True, "trigger": "on create", "desc": "Read sources, write summary + problem statement"},
-    {"id": "exec", "name": "launch-claude-code", "on": True, "trigger": "manual / CI", "desc": "Spawn headless session under project ceiling"},
-    {"id": "rerank", "name": "re-rank-queue", "on": True, "trigger": "nightly", "desc": "Score importance × urgency, propagate deadlines"},
-    {"id": "bs", "name": "brightspace-pull", "on": True, "trigger": "hourly", "desc": "New assignments → enriched tickets"},
-    {"id": "digest", "name": "weekly-digest", "on": False, "trigger": "Sun 6pm", "desc": "Summarize the week, flag slipping deadlines"},
+    {"id": "debug", "name": "debug-issue", "on": True, "trigger": "on error / cau / flt",
+     "desc": "Root-cause a failing container or ticket from logs before any fix"},
+    {"id": "fix", "name": "fix-project", "on": True, "trigger": "manual / cau|flt",
+     "desc": "Bring a degraded project back to green within its autonomy ceiling"},
+    {"id": "triage", "name": "triage-ticket", "on": True, "trigger": "on new ticket",
+     "desc": "Enrich + route an incoming ticket so it's ready to execute"},
 ]
 
 MEMORY_FACTS = [

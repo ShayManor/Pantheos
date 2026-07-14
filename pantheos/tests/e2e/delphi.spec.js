@@ -41,7 +41,8 @@ test("delphi history persists across reload", async ({ page }) => {
 test("connectors: add, toggle and delete", async ({ page }) => {
   await navTo(page, "Delphi");
   await page.getByRole("button", { name: "Connectors, skills & memory" }).click();
-  await expect(page.locator(".gs-conn", { hasText: "GitHub" })).toBeVisible();
+  // The real, seeded connector — Pantheos itself (the MCP server).
+  await expect(page.locator(".gs-conn", { hasText: "Pantheos" })).toBeVisible();
 
   await page.getByPlaceholder("Connector name").fill("TestConn");
   await page.getByPlaceholder("server URL").fill("t.local");
@@ -49,10 +50,10 @@ test("connectors: add, toggle and delete", async ({ page }) => {
   await expect(page.locator(".gs-conn", { hasText: "TestConn" })).toBeVisible();
   await expect(page.locator(".gs-toast")).toContainText("Connected TestConn");
 
-  const github = page.locator(".gs-conn", { hasText: "GitHub" });
-  await expect(github.locator(".gs-switch")).toHaveClass(/on/);
-  await github.locator(".gs-switch").click();
-  await expect(github.locator(".gs-switch")).not.toHaveClass(/on/);
+  const pantheos = page.locator(".gs-conn", { hasText: "Pantheos" });
+  await expect(pantheos.locator(".gs-switch")).toHaveClass(/on/);
+  await pantheos.locator(".gs-switch").click();
+  await expect(pantheos.locator(".gs-switch")).not.toHaveClass(/on/);
 
   const testConn = page.locator(".gs-conn", { hasText: "TestConn" });
   await expect(testConn).toHaveCount(1);
@@ -64,7 +65,9 @@ test("skills and memory tabs render", async ({ page }) => {
   await navTo(page, "Delphi");
   await page.getByRole("button", { name: "Connectors, skills & memory" }).click();
   await page.locator(".gs-toggle button", { hasText: "Skills" }).click();
-  await expect(page.getByText("enrich-ticket")).toBeVisible();
+  await expect(page.getByText("debug-issue")).toBeVisible();
+  await expect(page.getByText("fix-project")).toBeVisible();
+  await expect(page.getByText("triage-ticket")).toBeVisible();
   await page.locator(".gs-toggle button", { hasText: "Memory" }).click();
   await expect(page.getByText("LEARNED FACTS")).toBeVisible();
   await expect(page.getByText("Prefers terse, technically precise replies")).toBeVisible();

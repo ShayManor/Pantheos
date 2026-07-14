@@ -37,8 +37,25 @@ services:
       PANTHEOS_ALLOW_RESEED: "0"
       DELPHI_ACP_MODE: acp
       # DELPHI_ACP_CMD default is: ssh minipc "bash -lc 'hermes acp'"
+      # Hands the Pantheos MCP tools to Hermes over ACP (the mcp service below).
+      PANTHEOS_MCP_URL: http://127.0.0.1:8001/mcp
     volumes:
       - ${HOME}/.ssh:/root/.ssh:ro   # key/config to reach the host's hermes over SSH
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Real MCP server: exposes Pantheos tickets/monitor/memory + Claude Code to the
+  # agent. Host-networked so Hermes on the minipc reaches it at localhost:8001.
+  mcp:
+    image: ghcr.io/shaymanor/pantheos:latest
+    command: ["python", "-m", "app.mcp", "http"]
+    network_mode: host
+    environment:
+      PANTHEOS_DATABASE_URL: postgresql+psycopg://pantheos:pantheos@127.0.0.1:5432/pantheos
+      PANTHEOS_MCP_HOST: 0.0.0.0
+      PANTHEOS_MCP_PORT: "8001"
     depends_on:
       db:
         condition: service_healthy

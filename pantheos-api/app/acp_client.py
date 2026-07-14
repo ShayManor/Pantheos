@@ -20,6 +20,14 @@ _DEFAULT_ACP_CMD = "ssh minipc \"bash -lc 'hermes acp'\""
 _SENTINEL = object()
 
 
+def _mcp_servers():
+	"""MCP server configs to expose to Hermes, from PANTHEOS_MCP_URL (env-gated)."""
+	url = os.environ.get("PANTHEOS_MCP_URL")
+	if not url:
+		return []
+	return [{"name": "pantheos", "url": url, "type": "http"}]
+
+
 def run_turn(text, hermes_session_id, model=None):  # model ignored: Hermes uses its own config
     """Yield normalized event dicts for one user turn."""
     q = queue.Queue()
@@ -108,10 +116,10 @@ async def _drive_async(text, hermes_session_id, on_event):
             use_unstable_protocol=True) as (conn, proc):
         await conn.initialize(protocol_version=acp.PROTOCOL_VERSION, client_capabilities=None)
         if hermes_session_id:
-            await conn.load_session(cwd=os.getcwd(), session_id=hermes_session_id, mcp_servers=[])
+            await conn.load_session(cwd=os.getcwd(), session_id=hermes_session_id, mcp_servers=_mcp_servers())
             sid = hermes_session_id
         else:
-            resp = await conn.new_session(cwd=os.getcwd(), mcp_servers=[])
+            resp = await conn.new_session(cwd=os.getcwd(), mcp_servers=_mcp_servers())
             sid = resp.session_id
         acc["sid"] = sid
         try:

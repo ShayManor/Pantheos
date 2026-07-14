@@ -99,8 +99,10 @@ def seed(session):
                              err=c["err"], rps=c["rps"], p95=c["p95"], restarts=c["restarts"],
                              up=c["up"], image=c["image"], position=i))
 
+    from .mcp.server import TOOL_COUNT
     for i, m in enumerate(S.MCP_SERVERS):
-        session.add(McpServer(id=m["id"], name=m["name"], url=m["url"], tools=m["tools"],
+        tools = str(TOOL_COUNT) if m["id"] == "pantheos" else m["tools"]
+        session.add(McpServer(id=m["id"], name=m["name"], url=m["url"], tools=tools,
                              on=m["on"], desc=m["desc"], position=i))
     for i, sk in enumerate(S.SKILLS):
         session.add(Skill(id=sk["id"], name=sk["name"], on=sk["on"], trigger=sk["trigger"],
