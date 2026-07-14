@@ -238,3 +238,14 @@ def test_tool_name_prefers_title_then_falls_back_to_none():
 
     assert acp_client._tool_name(Named()) == "Search"
     assert acp_client._tool_name(Unnamed()) is None
+
+
+def test_mcp_servers_from_env(monkeypatch):
+    from app import acp_client
+    monkeypatch.delenv("PANTHEOS_MCP_URL", raising=False)
+    assert acp_client._mcp_servers() == []
+    monkeypatch.setenv("PANTHEOS_MCP_URL", "http://mac.tailnet:8001/mcp")
+    cfgs = acp_client._mcp_servers()
+    assert len(cfgs) == 1
+    assert cfgs[0]["name"] == "pantheos"
+    assert cfgs[0]["url"] == "http://mac.tailnet:8001/mcp"
