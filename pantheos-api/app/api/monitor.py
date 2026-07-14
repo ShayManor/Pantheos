@@ -1,10 +1,14 @@
 from flask import Blueprint, jsonify
 
 from . import db, get_or_404
-from .. import metrics
+from .. import caddy_logs, metrics
 from ..models import Area, Container, Host, Project
 
 bp = Blueprint("monitor", __name__, url_prefix="/api")
+
+# The one container whose telemetry is real (parsed from the Caddy access log);
+# every other container stays mocked. See caddy_logs / spec §monitor.
+PANTHEOS_CID = "gs-platform"
 
 
 @bp.get("/areas")
@@ -28,18 +32,28 @@ def list_hosts():
 @bp.get("/containers")
 def list_containers():
     rows = db().query(Container).order_by(Container.position).all()
-    return jsonify([c.to_dict() for c in rows])
+    out = [c.to_dict() for c in rows]
+    if caddy_logs.available():
+        live = caddy_logs.rollup()
+        for d in out:
+            if d["id"] == PANTHEOS_CID:
+                d.update(live)
+    return jsonify(out)
 
 
 @bp.get("/containers/<cid>/metrics")
 def container_metrics(cid):
     c = get_or_404(Container, cid)
+    if cid == PANTHEOS_CID and caddy_logs.available():
+        return jsonify(caddy_logs.metrics())
     return jsonify(metrics.container_metrics(c))
 
 
 @bp.get("/containers/<cid>/logs")
 def container_logs(cid):
     c = get_or_404(Container, cid)
+    if cid == PANTHEOS_CID and caddy_logs.available():
+        return jsonify({"lines": caddy_logs.logs()})
     return jsonify({"lines": metrics.container_logs(c)})
 
 

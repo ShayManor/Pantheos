@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import React from "react";
 import { Check, ChevronRight, Clock, Gauge, ListChecks, Radio, Satellite } from "lucide-react";
 import { CSS } from "./styles.js";
 import { Nav } from "./nav.jsx";
+import { pathForNode, nodeFromPath, stackFromPath } from "./lib/routes.js";
 import { api } from "./api.js";
 import QueueView from "./views/QueueView.jsx";
 import TicketDetail from "./views/TicketDetail.jsx";
@@ -23,7 +24,9 @@ export default function Pantheos() {
   const [containers, setContainers] = useState([]);
   const [areas, setAreas] = useState([]);
 
-  const [stack, setStack] = useState([{ view: "queue" }]);
+  const [stack, setStack] = useState(() => stackFromPath(window.location.pathname));
+  const stackRef = useRef(stack);
+  stackRef.current = stack;
   const [monMode, setMonMode] = useState("projects");
   const [filter, setFilter] = useState(null);
   const [toasts, setToasts] = useState([]);
@@ -53,9 +56,33 @@ export default function Pantheos() {
     setToasts((t) => [...t, { id, text, action }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200);
   };
-  const go = (node) => setStack((s) => [...s, node]);
-  const back = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
-  const root = (view) => { setStack([{ view }]); setFilter(null); };
+  const go = (node) => {
+    const next = [...stackRef.current, node];
+    window.history.pushState(next, "", pathForNode(node));
+    setStack(next);
+  };
+  const back = () => { if (stackRef.current.length > 1) window.history.back(); };
+  const root = (view) => {
+    const next = [{ view }];
+    window.history.pushState(next, "", pathForNode({ view }));
+    setStack(next);
+    setFilter(null);
+  };
+
+  // Sync the nav stack with the browser History API so back/forward, refresh,
+  // and deep links work. On mount, expand the current URL into a full stack and
+  // seed synthetic parent entries so "back" from a deep link returns in-app.
+  useEffect(() => {
+    const init = stackFromPath(window.location.pathname);
+    window.history.replaceState([init[0]], "", pathForNode(init[0]));
+    for (let i = 1; i < init.length; i++)
+      window.history.pushState(init.slice(0, i + 1), "", pathForNode(init[i]));
+    setStack(init);
+    const onPop = (e) =>
+      setStack(Array.isArray(e.state) ? e.state : stackFromPath(window.location.pathname));
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const launchTicket = (id) => {
     api.launch(id).then(({ ticket, toast: msg }) => {

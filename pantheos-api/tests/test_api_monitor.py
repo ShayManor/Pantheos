@@ -40,3 +40,37 @@ def test_container_logs(client):
 def test_monitor_series(client):
     assert len(client.get("/api/monitor/usage").get_json()) == 14
     assert len(client.get("/api/monitor/errseries").get_json()) == 14
+
+
+import json
+
+
+def _caddy_log(tmp_path, monkeypatch):
+    p = tmp_path / "access.log"
+    p.write_text("\n".join(
+        json.dumps({"ts": 1e9 + i, "duration": 0.01 * (i + 1),
+                    "status": 500 if i == 2 else 200,
+                    "request": {"method": "GET", "host": "pantheos.app",
+                                "uri": f"/api/tickets?p={i}"}})
+        for i in range(5)) + "\n")
+    monkeypatch.setenv("CADDY_ACCESS_LOG", str(p))
+    return p
+
+
+def test_pantheos_container_uses_caddy_log(client, tmp_path, monkeypatch):
+    _caddy_log(tmp_path, monkeypatch)
+    m = client.get("/api/containers/gs-platform/metrics").get_json()
+    assert m["off"] is False and len(m["series"]) == 20
+    logs = client.get("/api/containers/gs-platform/logs").get_json()["lines"]
+    assert any("/api/tickets" in l["msg"] for l in logs)
+    assert any(l["lvl"] == "err" for l in logs)  # the 5xx line
+    gs = next(c for c in client.get("/api/containers").get_json() if c["id"] == "gs-platform")
+    assert gs["rps"].endswith("/s") and gs["err"] == "20.0%"  # 1 of 5 is 5xx
+
+
+def test_pantheos_container_falls_back_to_mock_without_log(client, monkeypatch):
+    monkeypatch.delenv("CADDY_ACCESS_LOG", raising=False)
+    assert len(client.get("/api/containers/gs-platform/metrics").get_json()["series"]) == 20
+    assert len(client.get("/api/containers/gs-platform/logs").get_json()["lines"]) > 0
+    gs = next(c for c in client.get("/api/containers").get_json() if c["id"] == "gs-platform")
+    assert gs["rps"] == "12/s"  # seeded mock value, untouched
