@@ -34,7 +34,7 @@ def list_containers():
     rows = db().query(Container).order_by(Container.position).all()
     out = [c.to_dict() for c in rows]
     if caddy_logs.available():
-        live = caddy_logs.rollup()
+        live = caddy_logs.rollup(caddy_logs.PANTHEOS_HOSTS)
         for d in out:
             if d["id"] == PANTHEOS_CID:
                 d.update(live)
@@ -45,7 +45,7 @@ def list_containers():
 def container_metrics(cid):
     c = get_or_404(Container, cid)
     if cid == PANTHEOS_CID and caddy_logs.available():
-        return jsonify(caddy_logs.metrics())
+        return jsonify(caddy_logs.metrics(caddy_logs.PANTHEOS_HOSTS))
     return jsonify(metrics.container_metrics(c))
 
 
@@ -53,7 +53,7 @@ def container_metrics(cid):
 def container_logs(cid):
     c = get_or_404(Container, cid)
     if cid == PANTHEOS_CID and caddy_logs.available():
-        return jsonify({"lines": caddy_logs.logs()})
+        return jsonify({"lines": caddy_logs.logs(caddy_logs.PANTHEOS_HOSTS)})
     return jsonify({"lines": metrics.container_logs(c)})
 
 
