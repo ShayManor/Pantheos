@@ -13,7 +13,7 @@ def test_run_turn_selects_real_client(monkeypatch):
     monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
     called = {}
 
-    def fake(text, hsid, model=None):
+    def fake(text, hsid, model=None, history=None):
         called["args"] = (text, hsid, model)
         yield {"type": "done", "text": "ok", "reasoning": "",
                "tools": [], "hermes_session_id": "hs1"}

@@ -65,6 +65,27 @@ def test_streams_reasoning_text_and_done(monkeypatch):
     assert events[-1]["model"] == "gpt-5.6-terra"          # resolved model reported back
 
 
+def test_history_is_replayed_between_system_and_current_turn(monkeypatch):
+    monkeypatch.setenv("DELPHI_OPENAI_API_KEY", "sk-test")
+    captured = {}
+
+    def fake_urlopen(req, timeout=None):
+        captured["messages"] = json.loads(req.data)["messages"]
+        return FakeResp([b"data: [DONE]\n"])
+
+    monkeypatch.setattr("app.openai_client.urllib.request.urlopen", fake_urlopen)
+    history = [
+        {"role": "user", "content": "my name is Shay"},
+        {"role": "assistant", "content": "Noted."},
+    ]
+    list(oc.run_turn("what is my name", "hs1", None, history))
+
+    msgs = captured["messages"]
+    assert msgs[0]["role"] == "system"                       # system prompt first
+    assert msgs[1:3] == history                              # prior turns replayed in order
+    assert msgs[-1] == {"role": "user", "content": "what is my name"}   # current turn last
+
+
 def test_reasoning_field_fallback_and_base_url_and_key_fallback(monkeypatch):
     monkeypatch.delenv("DELPHI_OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "k")                            # fallback key env
@@ -119,11 +140,14 @@ def test_dispatcher_selects_openai_and_passes_model(monkeypatch):
     monkeypatch.setenv("DELPHI_ACP_MODE", "openai")
     got = {}
 
-    def fake(text, hsid, model=None):
+    def fake(text, hsid, model=None, history=None):
         got["model"] = model
+        got["history"] = history
         yield {"type": "done", "text": "hi", "reasoning": "", "tools": [], "hermes_session_id": hsid}
 
     monkeypatch.setattr("app.openai_client.run_turn", fake)
-    out = list(acp.run_turn("q", "hs", "gpt-5.6-luna"))
+    hist = [{"role": "user", "content": "earlier"}]
+    out = list(acp.run_turn("q", "hs", "gpt-5.6-luna", hist))
     assert out[-1]["text"] == "hi"
     assert got["model"] == "gpt-5.6-luna"
+    assert got["history"] == hist

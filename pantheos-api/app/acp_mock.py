@@ -12,7 +12,7 @@ def _chunks(s, n=24):
     return [s[i:i + n] for i in range(0, len(s), n)] or [""]
 
 
-def run_turn(text, hermes_session_id, model=None):  # model ignored: deterministic mock
+def run_turn(text, hermes_session_id, model=None, history=None):  # model/history ignored: deterministic mock
     base = delphi_logic.reply(text)          # {"text": str, "tools": [str]}
     tools = base["tools"]
 

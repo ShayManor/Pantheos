@@ -59,7 +59,7 @@ export default function ContainerDetail({ id }) {
         </div>
       ) : (
         <div className="gs-card" style={{ padding: "18px 20px", marginBottom: 22 }}>
-          <div className="gs-section-h" style={{ marginBottom: 14 }}><Activity size={12} />{c.id === "gs-platform" ? "REQ/MIN · LAST 20 MIN" : "CPU · LAST 20 MIN"}</div>
+          <div className="gs-section-h" style={{ marginBottom: 14 }}><Activity size={12} />{["gs-platform", "rviewer"].includes(c.id) ? "REQ/MIN · LAST 20 MIN" : "CPU · LAST 20 MIN"}</div>
           <AreaSpark data={series} color={c.status === "flt" ? "#BF3A3A" : "#0F7A4B"} height={120} yWidth={40} gid="gc" />
         </div>
       )}

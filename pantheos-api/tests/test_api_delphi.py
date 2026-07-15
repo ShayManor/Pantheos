@@ -131,6 +131,32 @@ def test_chat_stream_persists_and_streams(client):
     assert sess["msgs"][1]["tools"] == ["calendar", "brightspace", "queue"]
 
 
+def test_chat_stream_threads_prior_turns_as_history(client, monkeypatch):
+    captured = {}
+
+    def spy(text, hermes_session_id, model=None, history=None):
+        captured["history"] = history
+        yield {"type": "done", "text": "ok", "reasoning": "", "tools": [],
+               "hermes_session_id": hermes_session_id or "s"}
+
+    monkeypatch.setattr("app.acp.run_turn", spy)
+    sid = client.post("/api/delphi/sessions", json={}).get_json()["id"]
+
+    # First turn: no prior context.
+    _sse_events(client.post("/api/delphi/chat/stream",
+                            json={"session_id": sid, "text": "my name is Shay"}))
+    assert captured["history"] == []
+
+    # Second turn: the first user+assistant turns replay as OpenAI-style history,
+    # oldest-first, and the current turn is NOT included (it is passed as text).
+    _sse_events(client.post("/api/delphi/chat/stream",
+                            json={"session_id": sid, "text": "what is my name"}))
+    assert captured["history"] == [
+        {"role": "user", "content": "my name is Shay"},
+        {"role": "assistant", "content": "ok"},
+    ]
+
+
 def test_chat_stream_missing_session_404(client):
     assert client.post("/api/delphi/chat/stream",
                        json={"session_id": "nope", "text": "hi"}).status_code == 404
@@ -139,7 +165,7 @@ def test_chat_stream_missing_session_404(client):
 def test_chat_stream_transport_error(client, monkeypatch):
     sid = client.post("/api/delphi/sessions", json={}).get_json()["id"]
 
-    def boom(text, hermes_session_id, model=None):
+    def boom(text, hermes_session_id, model=None, history=None):
         raise RuntimeError("transport down")
 
     monkeypatch.setattr("app.acp.run_turn", boom)

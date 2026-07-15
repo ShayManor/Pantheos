@@ -25,10 +25,12 @@ def _mcp_servers():
 	url = os.environ.get("PANTHEOS_MCP_URL")
 	if not url:
 		return []
-	return [{"name": "pantheos", "url": url, "type": "http"}]
+	# ACP's HttpMcpServer requires `headers` (Hermes rejects the whole session
+	# request otherwise, leaving the agent with no Pantheos tools).
+	return [{"name": "pantheos", "url": url, "type": "http", "headers": []}]
 
 
-def run_turn(text, hermes_session_id, model=None):  # model ignored: Hermes uses its own config
+def run_turn(text, hermes_session_id, model=None, history=None):  # model/history ignored: Hermes threads its own session
     """Yield normalized event dicts for one user turn."""
     q = queue.Queue()
 

@@ -6,9 +6,16 @@ from ..models import Area, Container, Host, Project
 
 bp = Blueprint("monitor", __name__, url_prefix="/api")
 
-# The one container whose telemetry is real (parsed from the Caddy access log);
-# every other container stays mocked. See caddy_logs / spec §monitor.
-PANTHEOS_CID = "gs-platform"
+# Containers whose telemetry is real — parsed from the Caddy access log for the
+# hosts they serve; every other container stays mocked. See caddy_logs.
+CADDY_CONTAINER_HOSTS = {
+    "gs-platform": caddy_logs.PANTHEOS_HOSTS,
+    "rviewer": caddy_logs.RESEARCHVIEWER_HOSTS,
+}
+# Projects whose "users" is a real recent-visitor count (distinct client IPs).
+CADDY_PROJECT_HOSTS = {
+    "rviewer": caddy_logs.RESEARCHVIEWER_HOSTS,
+}
 
 
 @bp.get("/areas")
@@ -20,7 +27,12 @@ def list_areas():
 @bp.get("/projects")
 def list_projects():
     rows = db().query(Project).order_by(Project.position).all()
-    return jsonify({p.key: p.to_dict() for p in rows})
+    out = {p.key: p.to_dict() for p in rows}
+    if caddy_logs.available():
+        for key, hosts in CADDY_PROJECT_HOSTS.items():
+            if key in out:
+                out[key]["users"] = caddy_logs.visitors(hosts)
+    return jsonify(out)
 
 
 @bp.get("/hosts")
@@ -34,26 +46,28 @@ def list_containers():
     rows = db().query(Container).order_by(Container.position).all()
     out = [c.to_dict() for c in rows]
     if caddy_logs.available():
-        live = caddy_logs.rollup(caddy_logs.PANTHEOS_HOSTS)
         for d in out:
-            if d["id"] == PANTHEOS_CID:
-                d.update(live)
+            hosts = CADDY_CONTAINER_HOSTS.get(d["id"])
+            if hosts:
+                d.update(caddy_logs.rollup(hosts))
     return jsonify(out)
 
 
 @bp.get("/containers/<cid>/metrics")
 def container_metrics(cid):
     c = get_or_404(Container, cid)
-    if cid == PANTHEOS_CID and caddy_logs.available():
-        return jsonify(caddy_logs.metrics(caddy_logs.PANTHEOS_HOSTS))
+    hosts = CADDY_CONTAINER_HOSTS.get(cid)
+    if hosts and caddy_logs.available():
+        return jsonify(caddy_logs.metrics(hosts))
     return jsonify(metrics.container_metrics(c))
 
 
 @bp.get("/containers/<cid>/logs")
 def container_logs(cid):
     c = get_or_404(Container, cid)
-    if cid == PANTHEOS_CID and caddy_logs.available():
-        return jsonify({"lines": caddy_logs.logs(caddy_logs.PANTHEOS_HOSTS)})
+    hosts = CADDY_CONTAINER_HOSTS.get(cid)
+    if hosts and caddy_logs.available():
+        return jsonify({"lines": caddy_logs.logs(hosts)})
     return jsonify({"lines": metrics.container_logs(c)})
 
 

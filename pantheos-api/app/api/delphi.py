@@ -91,6 +91,16 @@ def chat_stream():
     sess_id = sess.id
     hermes_session_id = sess.hermes_session_id
 
+    # Prior turns of this session, oldest-first, as OpenAI-style chat history so
+    # the model has conversational memory (see acp.run_turn). Built before the
+    # current user turn is persisted so it isn't duplicated with `text` below.
+    history = [
+        {"role": "assistant" if m.who == "flight" else "user", "content": m.text}
+        for m in db().query(DelphiMessage)
+        .filter(DelphiMessage.session_id == sess_id)
+        .order_by(DelphiMessage.position)
+    ]
+
     # Persist the user turn immediately.
     db().add(DelphiMessage(session_id=sess_id, who="me", text=text,
                            position=_tail_position(DelphiMessage)))
@@ -99,7 +109,7 @@ def chat_stream():
     def generate():
         final = None
         try:
-            for ev in acp.run_turn(text, hermes_session_id, model):
+            for ev in acp.run_turn(text, hermes_session_id, model, history):
                 if ev["type"] == "done":
                     final = ev
                 yield f"event: {ev['type']}\ndata: {json.dumps(ev)}\n\n"

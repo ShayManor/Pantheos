@@ -35,10 +35,12 @@ def _api_key():
     return os.environ.get("DELPHI_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
 
 
-def run_turn(text, hermes_session_id, model=None):
+def run_turn(text, hermes_session_id, model=None, history=None):
     """Yield normalized event dicts for one user turn, streamed from the model.
 
     ``model`` (from the UI selector) overrides the DELPHI_MODEL env default.
+    ``history`` is the prior turns of the session as OpenAI-style
+    {"role", "content"} dicts (oldest-first); replaying it gives the model memory.
     """
     key = _api_key()
     if not key:
@@ -52,6 +54,7 @@ def run_turn(text, hermes_session_id, model=None):
         "stream": True,
         "messages": [
             {"role": "system", "content": _system_prompt()},
+            *(history or []),
             {"role": "user", "content": text},
         ],
     }

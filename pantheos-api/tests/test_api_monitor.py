@@ -74,3 +74,37 @@ def test_pantheos_container_falls_back_to_mock_without_log(client, monkeypatch):
     assert len(client.get("/api/containers/gs-platform/logs").get_json()["lines"]) > 0
     gs = next(c for c in client.get("/api/containers").get_json() if c["id"] == "gs-platform")
     assert gs["rps"] == "12/s"  # seeded mock value, untouched
+
+
+def _rv_caddy_log(tmp_path, monkeypatch):
+    ips = ["1.1.1.1", "1.1.1.1", "2.2.2.2", "3.3.3.3"]  # 3 distinct visitors
+    p = tmp_path / "access.log"
+    p.write_text("\n".join(
+        json.dumps({"ts": 1e9 + i, "duration": 0.05, "status": 200,
+                    "request": {"method": "GET", "host": "researchviewer.org",
+                                "uri": f"/paper/{i}", "client_ip": "127.0.0.1",
+                                "headers": {"Cf-Connecting-Ip": [ip]}}})
+        for i, ip in enumerate(ips)) + "\n")
+    monkeypatch.setenv("CADDY_ACCESS_LOG", str(p))
+    return p
+
+
+def test_rviewer_container_uses_caddy_log(client, tmp_path, monkeypatch):
+    _rv_caddy_log(tmp_path, monkeypatch)
+    m = client.get("/api/containers/rviewer/metrics").get_json()
+    assert m["off"] is False and len(m["series"]) == 20
+    logs = client.get("/api/containers/rviewer/logs").get_json()["lines"]
+    assert logs and all("/paper/" in l["msg"] for l in logs)
+    rv = next(c for c in client.get("/api/containers").get_json() if c["id"] == "rviewer")
+    assert rv["rps"].endswith("/s") and rv["err"] == "0.0%"
+
+
+def test_rviewer_project_users_are_real_visitor_count(client, tmp_path, monkeypatch):
+    _rv_caddy_log(tmp_path, monkeypatch)
+    projects = client.get("/api/projects").get_json()
+    assert projects["rviewer"]["users"] == 3  # distinct Cf-Connecting-Ip count
+
+
+def test_rviewer_project_users_none_without_log(client, monkeypatch):
+    monkeypatch.delenv("CADDY_ACCESS_LOG", raising=False)
+    assert client.get("/api/projects").get_json()["rviewer"]["users"] is None
