@@ -169,4 +169,4 @@ def test_sync_models_refreshes_stale_catalog(session):
     sync_models(session)
 
     ids = [m.id for m in session.query(AgentModel).order_by(AgentModel.position)]
-    assert ids == ["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"]
+    assert ids == ["gpt-5.6-terra", "gpt-5.6-luna", "zai/glm-5.2"]

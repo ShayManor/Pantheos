@@ -70,7 +70,7 @@ test("skills and memory tabs render", async ({ page }) => {
   await expect(page.getByText("triage-ticket")).toBeVisible();
   await page.locator(".gs-toggle button", { hasText: "Memory" }).click();
   await expect(page.getByText("LEARNED FACTS")).toBeVisible();
-  await expect(page.getByText("Prefers terse, technically precise replies")).toBeVisible();
+  await expect(page.getByText(/Acts through the Pantheos MCP server/)).toBeVisible();
 });
 
 test("switching the agent model updates the selector", async ({ page }) => {

@@ -1,11 +1,11 @@
-"""Real telemetry for the Pantheos container, parsed from the Caddy access log.
+"""Real telemetry parsed from the Caddy access log, per site.
 
-Unlike the deterministic mocks in ``metrics.py``, these read the actual
-``pantheos.app`` request lines from Caddy's JSON access log (path in the
-``CADDY_ACCESS_LOG`` env var). When the log is absent — dev, CI, the E2E box —
-``available()`` is False and the monitor endpoints fall back to the mock, so the
-suite stays deterministic. Windows are relative to the newest log entry, never
-the wall clock, for the same reason.
+Unlike the deterministic mocks in ``metrics.py``, these read actual request
+lines from Caddy's JSON access log (path in the ``CADDY_ACCESS_LOG`` env var),
+filtered to a given set of hosts. When the log is absent — dev, CI, the E2E box
+— ``available()`` is False and the monitor endpoints fall back to the mock, so
+the suite stays deterministic. Windows are relative to the newest log entry,
+never the wall clock, for the same reason.
 """
 import json
 import math
@@ -13,6 +13,7 @@ import os
 import time
 
 PANTHEOS_HOSTS = {"pantheos.app", "www.pantheos.app"}
+RESEARCHVIEWER_HOSTS = {"researchviewer.org", "www.researchviewer.org"}
 _TAIL_BYTES = 262_144
 
 
@@ -25,8 +26,17 @@ def available():
     return bool(p and os.path.isfile(p) and os.access(p, os.R_OK))
 
 
-def _entries():
-    """Parsed pantheos.app request records from the tail of the log, oldest first."""
+def _client_ip(req):
+    """Real visitor IP: Cloudflare's connecting-IP header, else XFF, else the peer."""
+    headers = req.get("headers", {})
+    forwarded = headers.get("Cf-Connecting-Ip") or headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded[0].split(",")[0].strip()
+    return req.get("client_ip", "")
+
+
+def _entries(hosts):
+    """Parsed request records for ``hosts`` from the tail of the log, oldest first."""
     p = _log_path()
     if not p:
         return []
@@ -42,7 +52,7 @@ def _entries():
         try:
             rec = json.loads(line)
             req = rec["request"]
-            if req["host"].split(":", 1)[0] not in PANTHEOS_HOSTS:
+            if req["host"].split(":", 1)[0] not in hosts:
                 continue
             out.append({
                 "ts": float(rec["ts"]),
@@ -50,6 +60,7 @@ def _entries():
                 "uri": req["uri"],
                 "status": int(rec["status"]),
                 "dur": float(rec["duration"]),
+                "ip": _client_ip(req),
             })
         except (ValueError, KeyError, TypeError):
             continue
@@ -69,18 +80,18 @@ def _hhmmss(ts):
     return f"{lt.tm_hour:02d}:{lt.tm_min:02d}:{lt.tm_sec:02d}"
 
 
-def logs(limit=20):
+def logs(hosts, limit=20):
     """Recent access lines shaped like the mock's container logs, oldest first."""
     return [{
         "t": _hhmmss(e["ts"]),
         "lvl": _level(e["status"]),
         "msg": f'{e["method"]} {e["uri"]} {e["status"]} {round(e["dur"] * 1000)}ms',
-    } for e in _entries()[-limit:]]
+    } for e in _entries(hosts)[-limit:]]
 
 
-def rollup():
+def rollup(hosts):
     """Current REQ/S, 5XX rate, and P95 latency over the tail window."""
-    es = _entries()
+    es = _entries(hosts)
     if not es:
         return {"rps": "0/s", "err": "0.0%", "p95": "—"}
     n = len(es)
@@ -91,9 +102,9 @@ def rollup():
     return {"rps": f"{round(n / span, 1)}/s", "err": f"{err}%", "p95": f"{p95} ms"}
 
 
-def metrics():
+def metrics(hosts):
     """Per-minute request counts for the last 20 minutes (chart series)."""
-    es = _entries()
+    es = _entries(hosts)
     series = [{"d": i, "v": 0} for i in range(20)]
     if es:
         newest = es[-1]["ts"]
@@ -102,3 +113,8 @@ def metrics():
             if 0 <= bucket <= 19:
                 series[bucket]["v"] += 1
     return {"series": series, "off": False}
+
+
+def visitors(hosts):
+    """Distinct client IPs seen for ``hosts`` over the tail window."""
+    return len({e["ip"] for e in _entries(hosts) if e["ip"]})

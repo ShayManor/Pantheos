@@ -181,10 +181,10 @@ SKILLS = [
 ]
 
 MEMORY_FACTS = [
-    "Prefers terse, technically precise replies",
-    "EVC → PR-only, never touch main",
-    "Does exams in one sitting — block the full window",
-    "Guardrail + MERLIN under active submission; results integrity matters",
+    "Acts through the Pantheos MCP server — 24 live tools over tickets, monitor, memory and Claude Code",
+    "Reads a project's spec and autonomy ceiling before acting; grounds every claim in a tool call",
+    "Autonomy is a hard ceiling — propose is PR-only and never touches main",
+    "Runs on Hermes over ACP; delegates real code changes to Claude Code",
 ]
 
 AGENT_RUNS = [
@@ -198,7 +198,7 @@ MODELS = [
     # id = the model string sent to the OpenAI-compatible API (chosen in the UI).
     {"id": "gpt-5.6-terra", "name": "GPT Terra", "tag": "openai · gpt-5.6"},
     {"id": "gpt-5.6-luna", "name": "GPT Luna", "tag": "openai · gpt-5.6"},
-    {"id": "gpt-5.6-sol", "name": "GPT Sol", "tag": "openai · gpt-5.6"},
+    {"id": "zai/glm-5.2", "name": "GLM 5.2", "tag": "z.ai · glm-5.2"},
 ]
 
 SESSIONS = [
