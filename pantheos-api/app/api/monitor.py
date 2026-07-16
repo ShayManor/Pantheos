@@ -181,9 +181,9 @@ def _apply_real(d, inv):
     cpu = victoria.query(f'sum(rate(container_cpu_usage_seconds_total{{name="{name}"}}[2m])) * 100')
     mem = victoria.query(f'sum(container_memory_working_set_bytes{{name="{name}"}})')
     restarts = victoria.query(f'sum(changes(container_start_time_seconds{{name="{name}"}}[1h]))')
-    rps = victoria.query(f'pantheos_caddy_rps{{host="{site}"}}')
-    err = victoria.query(f'pantheos_caddy_err_ratio{{host="{site}"}}')
-    p95 = victoria.query(f'pantheos_caddy_p95_ms{{host="{site}"}}')
+    rps = victoria.query(f'pantheos_caddy_rps{{site="{site}"}}')
+    err = victoria.query(f'pantheos_caddy_err_ratio{{site="{site}"}}')
+    p95 = victoria.query(f'pantheos_caddy_p95_ms{{site="{site}"}}')
     up_probe = victoria.query(f'probe_success{{instance="{probe}"}}')
 
     if cpu is not None:

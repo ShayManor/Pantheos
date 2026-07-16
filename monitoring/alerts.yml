@@ -5,7 +5,7 @@ groups:
     interval: 30s
     rules:
       - alert: HighErrorRate
-        expr: pantheos_caddy_err_ratio{host="pantheos.app"} > 0.05
+        expr: pantheos_caddy_err_ratio{site="pantheos.app"} > 0.05
         for: 2m
         labels: { severity: critical, project: groundstation, host: minipc, route: pantheos.app }
         annotations:
@@ -13,7 +13,7 @@ groups:
           description: "The 5xx error ratio for pantheos.app has exceeded 5% for 2m."
 
       - alert: HighErrorRate
-        expr: pantheos_caddy_err_ratio{host="researchviewer.org"} > 0.05
+        expr: pantheos_caddy_err_ratio{site="researchviewer.org"} > 0.05
         for: 2m
         labels: { severity: critical, project: rviewer, host: minipc, route: researchviewer.org }
         annotations:

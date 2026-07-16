@@ -3,8 +3,9 @@
 Caddy's native Prometheus metrics carry no per-vhost label (every site shares
 ``server="srv0"``), so per-site request rate / 5xx / p95 can't come from them.
 This exporter reuses the Caddy JSON access-log parsing in ``caddy_logs`` and
-republishes the numbers as per-``host`` gauges that vmagent scrapes into
-VictoriaMetrics. It runs from the app image (``python -m app.caddy_exporter``)
+republishes the numbers as per-``site`` gauges that vmagent scrapes into
+VictoriaMetrics (``site`` avoids colliding with the ``host`` machine label that
+vmagent's external_labels add). It runs from the app image (``python -m app.caddy_exporter``)
 with the access log mounted read-only; stdlib only, no prometheus_client dep.
 """
 import os
@@ -35,7 +36,7 @@ def render_metrics():
         lines.append(f"# HELP {metric} {help_text}")
         lines.append(f"# TYPE {metric} gauge")
         for label, _hosts in SITES:
-            lines.append(f'{metric}{{host="{label}"}} {stats[label][key]}')
+            lines.append(f'{metric}{{site="{label}"}} {stats[label][key]}')
     return "\n".join(lines) + "\n"
 
 
