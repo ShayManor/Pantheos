@@ -2,7 +2,7 @@ import { test, expect } from "./utils.js";
 
 test("edit and save a project's context, and it persists", async ({ page }) => {
   await page.locator(".gs-nav-item", { hasText: "Projects" }).click();
-  await page.locator(".gs-pcard", { hasText: "GitHub profile analytics" }).click();
+  await page.locator(".gs-pcard", { hasText: "GitHub README widgets" }).click();
   await page.getByRole("button", { name: "Context" }).click();
 
   const box = page.locator("textarea");

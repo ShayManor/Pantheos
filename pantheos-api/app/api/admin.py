@@ -1,7 +1,7 @@
 from flask import Blueprint, current_app, jsonify
 
 from . import db
-from ..seed import reset_db, seed
+from ..seed import reset_db, seed, seed_sample
 
 bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
@@ -16,4 +16,5 @@ def reseed():
         return jsonify({"error": "forbidden"}), 403
     reset_db(current_app.db_engine)
     seed(db())
+    seed_sample(db())
     return jsonify({"status": "reseeded"})
