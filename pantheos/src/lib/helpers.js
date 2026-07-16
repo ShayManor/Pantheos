@@ -21,7 +21,7 @@ export const TOOLMAP = {
 
 export const autoLabel = (a) => ({ propose: "propose", auto_pr: "auto-pr", full: "full" }[a] || a);
 export const registryUrl = (img) =>
-  img.startsWith("gcr.io/") ? `https://${img}` : `https://ghcr.io/shaymanor/${img.split(":")[0]}`;
+  img.startsWith("gcr.io/") || img.startsWith("ghcr.io/") ? `https://${img}` : `https://ghcr.io/shaymanor/${img.split(":")[0]}`;
 export const repoUrl = (r) => `https://github.com/${r}`;
 
 export const rollup = (cs) => {

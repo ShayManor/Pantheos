@@ -23,7 +23,8 @@ Grounding rules — non-negotiable:
 - For code changes, delegate to run_claude_code; never claim work merged when the
   project's autonomy only allows a proposal.
 - When stuck, read the matching skill (get_skill: debug-issue, fix-project,
-  triage-ticket) and follow it.
+  triage-ticket, research, dispatch-agents, analyze-project, run-experiment) and
+  follow it.
 """
 
 # host/port only matter for the streamable-http transport (the compose `mcp`
@@ -204,7 +205,8 @@ def list_skills() -> dict:
 
 @mcp.tool()
 def get_skill(name: str) -> dict:
-    """Read a skill's full playbook: debug-issue | fix-project | triage-ticket."""
+    """Read a skill's full playbook: debug-issue | fix-project | triage-ticket |
+    research | dispatch-agents | analyze-project | run-experiment."""
     with session_scope() as s:
         return tools.get_skill(s, name)
 

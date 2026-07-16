@@ -1,9 +1,10 @@
 from app.mcp import skills
 
 
-def test_lists_three_real_skills():
+def test_lists_real_skills():
     names = {s["name"] for s in skills.list_skills()}
-    assert names == {"debug-issue", "fix-project", "triage-ticket"}
+    assert names == {"debug-issue", "fix-project", "triage-ticket", "research",
+                     "dispatch-agents", "analyze-project", "run-experiment"}
     for s in skills.list_skills():
         assert s["trigger"] and s["description"]
 
@@ -16,6 +17,11 @@ def test_load_skill_body_and_grounding():
     assert "run_claude_code" in skills.load_skill("fix-project")["body"]
     assert "create_ticket" in skills.load_skill("triage-ticket")["body"] or \
            "update_ticket" in skills.load_skill("triage-ticket")["body"]
+    # the added skills are grounded in real MCP tools too
+    assert "get_container_logs" in skills.load_skill("research")["body"]
+    assert "run_claude_code" in skills.load_skill("dispatch-agents")["body"]
+    assert "get_project_spec" in skills.load_skill("analyze-project")["body"]
+    assert "get_container" in skills.load_skill("run-experiment")["body"]
 
 
 def test_load_unknown():

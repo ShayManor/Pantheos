@@ -35,10 +35,25 @@ export default function Pantheos() {
   const [contextTarget, setContextTarget] = useState(null);
   const [met, setMet] = useState(15153);
 
-  useEffect(() => {
+  const load = () =>
     Promise.all([api.tickets(), api.projects(), api.hosts(), api.containers(), api.areas()]).then(
       ([t, p, h, c, a]) => { setTickets(t); setProjects(p); setHosts(h); setContainers(c); setAreas(a); setReady(true); }
     );
+
+  // Load once, then keep the shared collections fresh so out-of-band changes
+  // (a project added by Delphi/the API) show up without a manual refresh: poll
+  // on an interval and refetch the moment the tab regains focus.
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 5000);
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   const cur = stack[stack.length - 1];

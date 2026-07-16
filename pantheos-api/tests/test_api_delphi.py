@@ -4,8 +4,10 @@ def test_context(client):
     assert len(d["connectors"]) == 1
     assert d["connectors"][0]["name"] == "Pantheos"
     assert int(d["connectors"][0]["tools"]) >= 20
-    assert len(d["skills"]) == 3
-    assert {s["name"] for s in d["skills"]} == {"debug-issue", "fix-project", "triage-ticket"}
+    assert len(d["skills"]) == 7
+    assert {s["name"] for s in d["skills"]} == {"debug-issue", "fix-project",
+        "triage-ticket", "research", "dispatch-agents", "analyze-project",
+        "run-experiment"}
     assert len(d["memory"]) == 4
     assert len(d["runs"]) == 4
     assert len(d["sessions"]) == 3

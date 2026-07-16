@@ -68,6 +68,10 @@ test("skills and memory tabs render", async ({ page }) => {
   await expect(page.getByText("debug-issue")).toBeVisible();
   await expect(page.getByText("fix-project")).toBeVisible();
   await expect(page.getByText("triage-ticket")).toBeVisible();
+  await expect(page.getByText("research", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("dispatch-agents")).toBeVisible();
+  await expect(page.getByText("analyze-project")).toBeVisible();
+  await expect(page.getByText("run-experiment")).toBeVisible();
   await page.locator(".gs-toggle button", { hasText: "Memory" }).click();
   await expect(page.getByText("LEARNED FACTS")).toBeVisible();
   await expect(page.getByText(/Acts through the Pantheos MCP server/)).toBeVisible();

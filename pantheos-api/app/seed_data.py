@@ -176,6 +176,14 @@ SKILLS = [
      "desc": "Bring a degraded project back to green within its autonomy ceiling"},
     {"id": "triage", "name": "triage-ticket", "on": True, "trigger": "on new ticket",
      "desc": "Enrich + route an incoming ticket so it's ready to execute"},
+    {"id": "research", "name": "research", "on": True, "trigger": "manual / open question",
+     "desc": "Answer a cross-cutting question from fleet evidence, citing every claim"},
+    {"id": "dispatch", "name": "dispatch-agents", "on": True, "trigger": "manual / batch work",
+     "desc": "Fan independent code work into parallel Claude Code runs, each within its ceiling"},
+    {"id": "analyze", "name": "analyze-project", "on": True, "trigger": "manual / project review",
+     "desc": "Grounded health + risk report for one project from spec, containers, tickets, logs"},
+    {"id": "experiment", "name": "run-experiment", "on": True, "trigger": "manual / perf regression",
+     "desc": "Test one hypothesis with a single controlled change, measured before and after"},
 ]
 
 MEMORY_FACTS = [
