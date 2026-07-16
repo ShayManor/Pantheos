@@ -20,11 +20,11 @@ def run_turn(text, hermes_session_id, model=None, history=None):  # model/histor
         f"The user asked: {text!r}. I'll check the queue and deadlines, "
         "then summarize the highest-leverage item."
     )
-    # Rich answer so the UI exercises markdown, LaTeX, code, and a ticket ref.
+    # Rich answer so the UI exercises markdown, LaTeX, and code.
     answer = (
         f"{base['text']}\n\n"
-        "**Priority math:** score $s = w_d \\cdot \\frac{1}{t} + w_e$ favors "
-        "`GRD-0182` today.\n\n"
+        "**Priority math:** score $s = w_d \\cdot \\frac{1}{t} + w_e$ ranks the "
+        "queue by urgency.\n\n"
         "```py\nscore = w_d / hours_left + w_e\n```"
     )
 

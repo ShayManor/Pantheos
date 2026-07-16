@@ -10,12 +10,6 @@ import Thinking from "../components/Thinking.jsx";
 import { TOOLMAP } from "../lib/helpers.js";
 import { api } from "../api.js";
 
-const VOICE_PHRASES = [
-  "What's blocking the MERLIN Rubik Pi port?",
-  "Show me everything due before Friday",
-  "Did the gh-stats fix pass canary?",
-];
-
 function RunRow({ r }) {
   const { go } = useNav();
   return (
@@ -66,9 +60,9 @@ export default function FlightView() {
 
   const suggestions = [
     ["What's due this week?", "Deadlines, ranked by urgency"],
-    ["Status of MERLIN", "Tickets + onboard containers"],
-    ["What did you do to gh-stats?", "Walk through the auto-fix"],
+    ["What's on fire?", "Containers needing attention"],
     ["Re-rank my queue", "Recompute importance × urgency"],
+    ["Summarize my projects", "Health across the fleet"],
   ];
 
   const send = async (q) => {
@@ -98,7 +92,7 @@ export default function FlightView() {
     const picked = Array.from(e.target.files || []).map((f) => ({ name: f.name, img: f.type.startsWith("image/") }));
     setAtts((a) => [...a, ...picked]); e.target.value = "";
   };
-  const stopRec = () => { setRecording(false); setInput(VOICE_PHRASES[0]); };
+  const stopRec = () => { setRecording(false); };
   const addServer = () => {
     if (!newSrv.name.trim()) return;
     api.addConnector(newSrv.name.trim(), newSrv.url.trim()).then((srv) => {

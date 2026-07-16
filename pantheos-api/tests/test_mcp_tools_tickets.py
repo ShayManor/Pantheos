@@ -77,3 +77,35 @@ def test_list_tickets_more_filters(session):
 def test_update_ticket_rejects_invalid_pri(session):
     tid = tools.create_ticket(session, title="Bad pri", project_key="merlin")["id"]
     assert tools.update_ticket(session, tid, pri=9)["error"] == "invalid priority"
+
+
+def test_delete_ticket_cascades_kids(session):
+    tid = tools.create_ticket(session, title="Delete me", project_key="merlin")["id"]
+    tools.add_dep(session, tid, "MER-0001", "dep")
+    tools.add_ticket_link(session, tid, "pr", "PR", "https://x/1")
+    assert tools.delete_ticket(session, tid) == {"deleted": tid}
+    assert tools.get_ticket(session, tid) == {"error": "unknown ticket", "id": tid}
+    assert tools.delete_ticket(session, "NOPE") == {"error": "unknown ticket", "id": "NOPE"}
+
+
+def test_update_and_remove_dep(session):
+    tid = tools.create_ticket(session, title="Dep edits", project_key="merlin")["id"]
+    tools.add_dep(session, tid, "MER-0009", "upstream")
+    up = tools.update_dep(session, tid, "MER-0009", title="renamed", done=True)
+    assert up["deps"][-1] == {"id": "MER-0009", "title": "renamed", "done": True}
+    removed = tools.remove_dep(session, tid, "MER-0009")
+    assert all(d["id"] != "MER-0009" for d in removed["deps"])
+    assert tools.update_dep(session, tid, "MISSING")["error"] == "unknown dep"
+    assert tools.remove_dep(session, tid, "MISSING")["error"] == "unknown dep"
+
+
+def test_update_and_remove_link(session):
+    tid = tools.create_ticket(session, title="Link edits", project_key="merlin")["id"]
+    tools.add_ticket_link(session, tid, "pr", "PR", "https://x/1")
+    up = tools.update_ticket_link(session, tid, "https://x/1", kind="doc",
+                                  label="spec", new_url="https://x/2")
+    assert up["links"][-1] == {"kind": "doc", "label": "spec", "url": "https://x/2"}
+    removed = tools.remove_ticket_link(session, tid, "https://x/2")
+    assert all(l["url"] != "https://x/2" for l in removed["links"])
+    assert tools.update_ticket_link(session, tid, "gone")["error"] == "unknown link"
+    assert tools.remove_ticket_link(session, tid, "gone")["error"] == "unknown link"

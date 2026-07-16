@@ -1,14 +1,11 @@
-import { useEffect, useState } from "react";
 import {
-  Activity, AlertTriangle, Cpu, Gauge, ListChecks, Satellite, Server, Signal, SignalZero,
+  Activity, Cpu, Gauge, ListChecks, Satellite, Server, Signal, SignalZero,
 } from "lucide-react";
 import { useNav } from "../nav.jsx";
 import { StatusPill } from "../components/pills.jsx";
 import ContainerTable from "../components/ContainerTable.jsx";
-import AreaSpark from "../components/AreaSpark.jsx";
 import { UsersChart } from "./ProjectsView.jsx";
 import { HOST_ICONS, rollup } from "../lib/helpers.js";
-import { api } from "../api.js";
 
 export default function MonitorView({ mode, setMode }) {
   const { go, containers, projects, hosts } = useNav();
@@ -16,20 +13,21 @@ export default function MonitorView({ mode, setMode }) {
   const byProject = (pk) => containers.filter((c) => c.proj === pk);
   const monProjects = [...new Set(containers.map((c) => c.proj))];
   const faults = containers.filter((c) => c.status === "flt").length;
+  const firstFault = containers.find((c) => c.status === "flt")?.id;
   const hostList = Object.values(hosts);
   const hostsOnline = hostList.filter((h) => h.kind === "always_on" || !byHost(h.id).every((c) => c.status === "los")).length;
+  const activeUsers = Object.values(projects).reduce((s, p) => s + (p.users || 0), 0);
 
   return (
     <>
       <div className="gs-eyebrow"><Gauge size={13} />STATION · MONITOR</div>
       <h1 className="gs-h1">Monitor</h1>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 14, marginBottom: 22 }}>
-        {[["ACTIVE USERS · 7D", "5,600", "go", null],
-          ["FAULTS", String(faults), faults ? "flt" : "go", "faults"],
-          ["HOSTS ONLINE", `${hostsOnline} / ${hostList.length}`, "cau", "compute"],
-          ["GLOBAL 5XX", "1.2%", "cau", null]].map(([l, v, c, act]) => (
+        {[["ACTIVE USERS · 7D", activeUsers.toLocaleString(), "go", null],
+          ["FAULTS", String(faults), faults ? "flt" : "go", faults ? "faults" : null],
+          ["HOSTS ONLINE", `${hostsOnline} / ${hostList.length}`, "cau", "compute"]].map(([l, v, c, act]) => (
           <div key={l} className="gs-card" style={{ padding: "15px 17px", cursor: act ? "pointer" : "default" }}
-            onClick={() => act === "compute" ? setMode("compute") : act === "faults" ? go({ view: "monitor", containerId: "gh-stats-api" }) : null}>
+            onClick={() => act === "compute" ? setMode("compute") : act === "faults" ? go({ view: "monitor", containerId: firstFault }) : null}>
             <div style={{ fontFamily: "var(--mono)", fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em",
               color: c === "flt" ? "var(--fault)" : c === "cau" ? "var(--caution)" : "var(--ink)" }}>{v}</div>
             <div style={{ fontFamily: "var(--mono)", fontSize: 9.5, color: "var(--ink-3)", letterSpacing: "0.06em", marginTop: 3 }}>{l}</div>
@@ -101,8 +99,6 @@ export function MonProjectDetail({ pk }) {
   const { go, projects, containers } = useNav();
   const p = projects[pk];
   const conts = containers.filter((c) => c.proj === pk);
-  const [errData, setErrData] = useState([]);
-  useEffect(() => { if (pk === "ghstats") api.errseries().then(setErrData); }, [pk]);
   return (
     <>
       <div className="gs-eyebrow">{p.area}</div>
@@ -119,13 +115,6 @@ export function MonProjectDetail({ pk }) {
             <div style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--ink-2)" }}><b style={{ color: "var(--ink)" }}>{p.users.toLocaleString()}</b> active</div>
           </div>
           <UsersChart />
-        </div>
-      )}
-
-      {pk === "ghstats" && (
-        <div className="gs-card" style={{ padding: "18px 20px", marginBottom: 22 }}>
-          <div className="gs-section-h" style={{ marginBottom: 14 }}><AlertTriangle size={12} color="var(--fault)" />gh-stats-api · 5XX RATE · breach at t-11m → <span className="gs-ref" onClick={() => go({ view: "queue", ticketId: "GHS-0311" })}>GHS-0311</span></div>
-          <AreaSpark data={errData} color="#BF3A3A" height={120} yWidth={44} gid="ge" />
         </div>
       )}
 
@@ -147,7 +136,7 @@ export function HostDetail({ hid }) {
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
         <I size={22} color="var(--ink-2)" />
         <h1 className="gs-h1" style={{ margin: 0 }}>{h.name}</h1>
-        {online ? <span className="pill go"><Signal size={11} />AOS</span> : <span className="pill neu"><SignalZero size={11} />LOS · last seen 3h ago</span>}
+        {online ? <span className="pill go"><Signal size={11} />AOS</span> : <span className="pill neu"><SignalZero size={11} />LOS</span>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 12, marginBottom: 22 }}>
         {[["CONTAINERS", String(conts.length)], ["FAULTS", String(conts.filter((c) => c.status === "flt").length)],

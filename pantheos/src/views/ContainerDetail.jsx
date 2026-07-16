@@ -54,7 +54,7 @@ export default function ContainerDetail({ id }) {
       {off ? (
         <div className="gs-card" style={{ padding: "14px 16px", marginBottom: 22, background: "var(--surface-2)" }}>
           <div style={{ display: "flex", gap: 10, alignItems: "center", color: "var(--ink-2)", fontSize: 13 }}>
-            <SignalZero size={16} /><span>Loss of signal · last reported 3h ago. Intermittent host, no alert.</span>
+            <SignalZero size={16} /><span>Loss of signal · intermittent host, no alert.</span>
           </div>
         </div>
       ) : (

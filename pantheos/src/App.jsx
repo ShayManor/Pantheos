@@ -33,7 +33,7 @@ export default function Pantheos() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [newTicketOpen, setNewTicketOpen] = useState(false);
   const [contextTarget, setContextTarget] = useState(null);
-  const [met, setMet] = useState(15153);
+  const [met, setMet] = useState(0);
 
   const load = () =>
     Promise.all([api.tickets(), api.projects(), api.hosts(), api.containers(), api.areas()]).then(
@@ -59,6 +59,7 @@ export default function Pantheos() {
   const cur = stack[stack.length - 1];
   useEffect(() => { const t = setInterval(() => setMet((m) => m + 1), 1000); return () => clearInterval(t); }, []);
   const clock = `${String(Math.floor(met / 3600)).padStart(2, "0")}:${String(Math.floor(met / 60) % 60).padStart(2, "0")}:${String(met % 60).padStart(2, "0")}`;
+  const firstFault = containers.find((c) => c.status === "flt")?.id;
   const cCount = {
     flt: containers.filter((c) => c.status === "flt").length,
     cau: containers.filter((c) => c.status === "cau").length,
@@ -181,7 +182,7 @@ export default function Pantheos() {
             <div className="gs-rail-foot">
               <div className="gs-flight-card" style={{ cursor: "pointer" }} onClick={() => root("flight")}>
                 <div className="row"><span className="dot go" /><span className="nm">Delphi</span><Radio size={13} color="var(--ink-3)" style={{ marginLeft: "auto" }} /></div>
-                <div className="st">● ONLINE · 40 RUNS LOGGED</div>
+                <div className="st">● ONLINE</div>
               </div>
             </div>
           </aside>
@@ -203,7 +204,7 @@ export default function Pantheos() {
                 <Radio size={13} />Search <kbd>⌘K</kbd>
               </button>
               <span className="gs-stat-chip" style={{ background: "var(--fault-soft)", color: "var(--fault)", cursor: "pointer" }}
-                onClick={() => go({ view: "monitor", containerId: "gh-stats-api" })}>
+                onClick={() => go({ view: "monitor", containerId: firstFault })}>
                 <span className="dot flt" style={{ boxShadow: "none" }} />{cCount.flt} fault</span>
               <span className="gs-met"><Clock size={12} />MET <b>{clock}</b></span>
             </div>

@@ -1,9 +1,8 @@
-"""Mock seed data, transcribed from the design prototype (code.jsx) and mapped
-onto the real schema from docs/spec.md.
+"""Baseline seed data, mapped onto the real schema from docs/spec.md.
 
-Tickets carry a real ``deadline_hours`` offset (hours from the seed anchor) and
-``effort_hours`` so the score in spec section 1.5 can be *derived* rather than
-hard-coded. Everything else mirrors the prototype's inline constants.
+Seeds the real, stable scaffolding — areas, projects, the deployed containers,
+the model catalog, MCP server, and memory facts. Live content (tickets, Delphi
+sessions, agent runs) is created at runtime, not seeded.
 """
 
 # ---------------------------------------------------------------- areas
@@ -44,123 +43,34 @@ PROJECTS = [
 # ---------------------------------------------------------------- tickets
 # deadline_hours: hours from the seed anchor (None = no deadline).
 # effort_hours:   estimated work. Both feed the derived score (spec 1.5).
-TICKETS = [
-    {"id": "GRD-0182", "proj": "guardrail", "area_id": "ideas_lab",
-     "title": "TMLR camera-ready revisions", "pri": 0, "deadline_hours": 48,
-     "effort_hours": 6, "life": "active", "agent": "idle", "source": "manual",
-     "summary": "Address reviewer 2's ablation request and re-run the OOD detection sweep before Friday.",
-     "body": "Reviewers accepted with minor revisions. R2 wants an ablation isolating the teacher-confidence threshold from the entropy gate, plus a table over 3 domain-shift severities. Re-run sweep on Gautschi (8×A100), regenerate Fig 4, update related work with the two ICLR'26 citations flagged by R1.",
-     "report": "Ran threshold sweep τ∈{0.5,0.7,0.9} × severity {light,med,heavy}. Cosine-gated variant held +1.2 mIoU over entropy-only at heavy shift. Fig 4 + Table 3 regenerated.",
-     "result": "Ablation confirms the teacher gate is the load-bearing component; camera-ready draft ready for your review.",
-     "deps": [],
-     "links": [
-         {"kind": "github_issue", "label": "ideas-lab/guardrail #182", "url": "/issues/182"},
-         {"kind": "file", "label": "reviews_r1_r2.pdf", "url": "attach"}]},
-
-    {"id": "GHS-0311", "proj": "ghstats", "area_id": "side",
-     "title": "500-rate breach on api container", "pri": 0, "deadline_hours": 0.5,
-     "effort_hours": 1, "life": "active", "agent": "executing", "source": "alert",
-     "summary": "Alert: gh-stats-api 500-rate > 5% for 11m on minipc. Auto-filed, Delphi dispatched.",
-     "body": "Alertmanager fired traefik_5xx_ratio{project=ghstats} = 0.061 sustained 11m. Restart count on gh-stats-api jumped to 4 in the last hour. Recent deploy c7f2a1 touched the rate-limit middleware. Likely a null-deref on the new Redis path when the cache is cold.",
-     "report": "Reproduced cold-cache null deref in rate-limit middleware. Added guard + fallback to in-memory bucket. CI green. PR opened, self-merge blocked pending green canary.",
-     "result": "Fix identified and PR pushed; 500-rate down to 0.3% on canary. Awaiting your merge (full-autonomy would auto-merge on green).",
-     "deps": [],
-     "links": [
-         {"kind": "github_pr", "label": "gh-stats#94 fix(rate-limit)", "url": "/pull/94"},
-         {"kind": "github_issue", "label": "auto: alert GHS-0311", "url": "/issues/x"}]},
-
-    {"id": "EVC-0074", "proj": "evc", "area_id": "evc",
-     "title": "Fix motor sync on left rear", "pri": 1, "deadline_hours": 96,
-     "effort_hours": 5, "life": "queued", "agent": "idle", "source": "slack",
-     "summary": "Encoder counts drift ~3% between rear motors above 20 km/h; suspect CAN timing.",
-     "body": "From #autonomy Slack: left-rear encoder desyncs from right-rear under load. Reproduces above 20 km/h. Hypothesis: CAN frame jitter on the VESC bus starves the sync loop. Check bus load %, confirm frame IDs aren't colliding with the IMU stream, consider raising sync-loop rate to 200Hz.",
-     "report": None, "result": None,
-     "deps": [{"id": "EVC-0071", "title": "CAN bus load profiling", "done": True}],
-     "links": [{"kind": "slack_message", "label": "#autonomy · thread", "url": "slack"}]},
-
-    {"id": "MER-0093", "proj": "merlin", "area_id": "ideas_lab",
-     "title": "Port edge extractor to Rubik Pi 3", "pri": 1, "deadline_hours": 144,
-     "effort_hours": 8, "life": "queued", "agent": "idle", "source": "github",
-     "summary": "Cross-compile the metric edge stage for the Rubik Pi NPU and benchmark vs Orin Nano.",
-     "body": "Move the edge-reconstruction stage off the Jetson Orin Nano onto the Rubik Pi 3 to free the Orin for the planner. Needs INT8 quantization of the extractor, a QNN delegate path, and a latency comparison at 640×480. Target < 22ms/frame.",
-     "report": None, "result": None,
-     "deps": [{"id": "MER-0088", "title": "INT8 quant of extractor", "done": False}],
-     "links": [{"kind": "github_issue", "label": "ideas-lab/merlin #93", "url": "/issues/93"}]},
-
-    {"id": "STA-0044", "proj": None, "area_id": "stat511",
-     "title": "STAT 511 · Problem Set 4", "pri": 1, "deadline_hours": 72,
-     "effort_hours": 4, "life": "queued", "agent": "idle", "source": "brightspace",
-     "summary": "MLE, sufficient statistics, and a Fisher-information derivation. PDF pulled from Brightspace.",
-     "body": "Brightspace: PS4 covers maximum likelihood estimation, sufficiency + the factorization theorem, and Cramér-Rao lower bound. 6 problems. Problem 5 asks for the Fisher information of a Gamma(α, β) with known β. Due 11:59pm.",
-     "report": None, "result": None, "deps": [],
-     "links": [
-         {"kind": "brightspace", "label": "STAT 511 · PS4", "url": "bs"},
-         {"kind": "file", "label": "ps4.pdf", "url": "attach"}]},
-
-    {"id": "GHS-0308", "proj": "ghstats", "area_id": "side",
-     "title": "SEO: programmatic profile pages", "pri": 2, "deadline_hours": 288,
-     "effort_hours": 6, "life": "queued", "agent": "idle", "source": "manual",
-     "summary": "Generate indexable per-user stat pages to break the traffic plateau.",
-     "body": "User growth flat ~3.8k/wk. Hypothesis: no long-tail SEO surface. Generate static, cacheable /u/<handle> pages with OG images, sitemap, and schema.org markup. Measure index coverage in Search Console after 2 weeks.",
-     "report": None, "result": None, "deps": [],
-     "links": [{"kind": "github_issue", "label": "gh-stats #308", "url": "/issues/308"}]},
-
-    {"id": "GPU-0021", "proj": "gpufindr", "area_id": "side",
-     "title": "Stale prices on 2 providers", "pri": 2, "deadline_hours": 120,
-     "effort_hours": 3, "life": "queued", "agent": "idle", "source": "alert",
-     "summary": "Scraper for Lambda + RunPod returning cached data > 6h old; freshness caution.",
-     "body": "Freshness monitor shows lambda + runpod feeds > 6h stale. Their markup changed; selectors likely broke. Re-derive selectors, add a freshness alert at 2h, backfill.",
-     "report": None, "result": None, "deps": [],
-     "links": [{"kind": "github_issue", "label": "gpufindr #21", "url": "/issues/21"}]},
-
-    {"id": "MER-0088", "proj": "merlin", "area_id": "ideas_lab",
-     "title": "INT8 quantization of extractor", "pri": 2, "deadline_hours": None,
-     "effort_hours": 5, "life": "backburner", "agent": "idle", "source": "manual",
-     "summary": "Post-training INT8 quant with a calibration set from the lab hallway captures.",
-     "body": "Prereq for the Rubik Pi port. Build a 300-frame calibration set from hallway captures, run PTQ, verify edge-F1 stays within 2% of FP16.",
-     "report": None, "result": None, "deps": [], "links": []},
-
-    {"id": "RV-0012", "proj": "rviewer", "area_id": "side",
-     "title": "Add citation-graph hover cards", "pri": 3, "deadline_hours": None,
-     "effort_hours": 3, "life": "backburner", "agent": "idle", "source": "manual",
-     "summary": "Show a mini citation neighborhood on hover over any paper node.",
-     "body": "Low stakes, full autonomy. On hover over a paper, fetch its 5 most-cited neighbors from the Semantic Scholar API and render a small card. Nice-to-have.",
-     "report": None, "result": None, "deps": [], "links": []},
-]
+# Real tickets arrive at runtime (Alertmanager webhook, the New-ticket modal,
+# Delphi); none are seeded.
+TICKETS = []
 
 # ---------------------------------------------------------------- hosts
 # expectation: always_on | intermittent
 HOSTS = [
     {"id": "minipc", "name": "minipc", "kind": "always_on", "icon": "Server",
      "tag": "ALWAYS-ON · local", "loc": "Purdue apt"},
-    {"id": "jetson", "name": "Jetson Orin Nano", "kind": "intermittent", "icon": "Cpu",
-     "tag": "INTERMITTENT · onboard", "loc": "EVC kart"},
-    {"id": "rubikpi", "name": "Rubik Pi 3", "kind": "intermittent", "icon": "HardDrive",
-     "tag": "INTERMITTENT · onboard", "loc": "EVC kart"},
 ]
 
 # ---------------------------------------------------------------- containers
 # A container belongs to exactly one project and runs on exactly one host.
-# Runtime metrics are mocked current-values (real monitoring is out of scope).
+# Only the real, deployed containers are seeded; live metrics come from the
+# monitor (VictoriaMetrics/Caddy) for the instrumented ones.
 CONTAINERS = [
-    {"id": "gh-stats-api", "proj": "ghstats", "host": "minipc", "role": "api", "status": "flt",
-     "cpu": "38%", "cpu_n": 38, "mem": "512M", "err": "6.1%", "rps": "142/s", "p95": "890 ms", "restarts": 4, "up": "AOS", "image": "ghstats/api:c7f2a1"},
+    {"id": "gh-stats-api", "proj": "ghstats", "host": "minipc", "role": "api", "status": "go",
+     "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "ghstats/api"},
     {"id": "gh-stats-web", "proj": "ghstats", "host": "minipc", "role": "web", "status": "go",
-     "cpu": "4%", "cpu_n": 4, "mem": "96M", "err": "0.0%", "rps": "38/s", "p95": "64 ms", "restarts": 0, "up": "AOS", "image": "ghstats/web:1f9d0e"},
-    {"id": "gpufindr-api", "proj": "gpufindr", "host": "minipc", "role": "api", "status": "cau",
-     "cpu": "12%", "cpu_n": 12, "mem": "210M", "err": "0.4%", "rps": "22/s", "p95": "120 ms", "restarts": 1, "up": "AOS", "image": "gpufindr/api:8a41c2"},
-    {"id": "gpufindr-scraper", "proj": "gpufindr", "host": "minipc", "role": "worker", "status": "cau",
-     "cpu": "22%", "cpu_n": 22, "mem": "180M", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "gpufindr/scraper:8a41c2"},
+     "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "ghstats/web"},
+    {"id": "gpufindr-api", "proj": "gpufindr", "host": "minipc", "role": "api", "status": "go",
+     "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "gpufindr/api"},
+    {"id": "gpufindr-scraper", "proj": "gpufindr", "host": "minipc", "role": "worker", "status": "go",
+     "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "gpufindr/scraper"},
     {"id": "gs-platform", "proj": "groundstation", "host": "minipc", "role": "api", "status": "go",
-     "cpu": "9%", "cpu_n": 9, "mem": "340M", "err": "0.0%", "rps": "12/s", "p95": "48 ms", "restarts": 0, "up": "AOS", "image": "pantheos/platform:dev"},
+     "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "pantheos/platform"},
     {"id": "rviewer", "proj": "rviewer", "host": "minipc", "role": "web", "status": "go",
-     "cpu": "6%", "cpu_n": 6, "mem": "150M", "err": "0.1%", "rps": "3/s", "p95": "210 ms", "restarts": 0, "up": "AOS", "image": "researchviewerapi:4f921"},
-    {"id": "merlin-planner", "proj": "merlin", "host": "jetson", "role": "planner", "status": "los",
-     "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "LOS", "image": "merlin/planner:orin"},
-    {"id": "merlin-edge", "proj": "merlin", "host": "jetson", "role": "perception", "status": "los",
-     "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "LOS", "image": "merlin/edge:orin"},
-    {"id": "edge-npu", "proj": "merlin", "host": "rubikpi", "role": "perception", "status": "los",
-     "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "LOS", "image": "merlin/edge:qnn"},
+     "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "researchviewerapi"},
 ]
 
 # ---------------------------------------------------------------- Delphi config
@@ -169,22 +79,7 @@ MCP_SERVERS = [
      "on": True, "desc": "Tickets, monitor, memory & Claude Code — grounded in each project's spec"},
 ]
 
-SKILLS = [
-    {"id": "debug", "name": "debug-issue", "on": True, "trigger": "on error / cau / flt",
-     "desc": "Root-cause a failing container or ticket from logs before any fix"},
-    {"id": "fix", "name": "fix-project", "on": True, "trigger": "manual / cau|flt",
-     "desc": "Bring a degraded project back to green within its autonomy ceiling"},
-    {"id": "triage", "name": "triage-ticket", "on": True, "trigger": "on new ticket",
-     "desc": "Enrich + route an incoming ticket so it's ready to execute"},
-    {"id": "research", "name": "research", "on": True, "trigger": "manual / open question",
-     "desc": "Answer a cross-cutting question from fleet evidence, citing every claim"},
-    {"id": "dispatch", "name": "dispatch-agents", "on": True, "trigger": "manual / batch work",
-     "desc": "Fan independent code work into parallel Claude Code runs, each within its ceiling"},
-    {"id": "analyze", "name": "analyze-project", "on": True, "trigger": "manual / project review",
-     "desc": "Grounded health + risk report for one project from spec, containers, tickets, logs"},
-    {"id": "experiment", "name": "run-experiment", "on": True, "trigger": "manual / perf regression",
-     "desc": "Test one hypothesis with a single controlled change, measured before and after"},
-]
+SKILLS = []
 
 MEMORY_FACTS = [
     "Acts through the Pantheos MCP server — 24 live tools over tickets, monitor, memory and Claude Code",
@@ -193,12 +88,7 @@ MEMORY_FACTS = [
     "Runs on Hermes over ACP; delegates real code changes to Claude Code",
 ]
 
-AGENT_RUNS = [
-    {"ticket": "GHS-0311", "kind": "execute", "status": "needs review", "cost": "$0.42", "when": "12m ago"},
-    {"ticket": "GRD-0182", "kind": "enrich", "status": "done", "cost": "$0.03", "when": "1h ago"},
-    {"ticket": "STA-0044", "kind": "enrich", "status": "done", "cost": "$0.05", "when": "3h ago"},
-    {"ticket": "EVC-0074", "kind": "enrich", "status": "done", "cost": "$0.04", "when": "5h ago"},
-]
+AGENT_RUNS = []
 
 MODELS = [
     # id = the model string sent to the OpenAI-compatible API (chosen in the UI).
@@ -207,20 +97,6 @@ MODELS = [
     {"id": "zai/glm-5.2", "name": "GLM 5.2", "tag": "z.ai · glm-5.2"},
 ]
 
-SESSIONS = [
-    {"id": "s1", "title": "EKF drift on the kart", "ts": "Yesterday", "msgs": [
-        {"who": "me", "text": "Why is the EKF drifting on the EVC kart?"},
-        {"who": "flight", "text": "The GEM1305 RTK fix was dropping to float during the sweep. I correlated the covariance spikes with EVC-0071 — CAN bus load hitting 82%. Raising the IMU publish rate to 200Hz and re-timing the fusion loop settled it.", "tools": ["queue", "vm"]},
-    ]},
-    {"id": "s2", "title": "Guardrail rebuttal plan", "ts": "2d ago", "msgs": [
-        {"who": "me", "text": "Draft a plan for the Guardrail rebuttal"},
-        {"who": "flight", "text": "R2's ablation is the crux. I outlined a 3-point response and staged the sweep under GRD-0182. The teacher-gate isolation is the strongest evidence — cosine-gated held +1.2 mIoU at heavy shift.", "tools": ["brightspace", "queue"]},
-    ]},
-    {"id": "s3", "title": "gh-stats SEO ideas", "ts": "Mar 3", "msgs": [
-        {"who": "me", "text": "How do I break the gh-stats traffic plateau?"},
-        {"who": "flight", "text": "Programmatic per-profile pages are the highest-leverage move — indexable long-tail surface you don't have yet. Filed as GHS-0308 with OG images + schema.org markup.", "tools": ["github", "vm"]},
-    ]},
-]
+SESSIONS = []
 
-GREETING = ("Delphi online. Two things want your attention: GRD-0182 (TMLR) is due in 2 days, "
-            "and my fix for the gh-stats 500-rate breach is in a PR waiting on your merge.")
+GREETING = "Delphi online. Ask me about your tickets, projects, or fleet."
