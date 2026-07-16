@@ -73,6 +73,11 @@ services:
     image: gcr.io/cadvisor/cadvisor:v0.55.1
     network_mode: host
     command: ["-port=8081"]
+    # The image's built-in HEALTHCHECK hits :8080, but we run on :8081 (Caddy owns
+    # 8080), so it always reports "unhealthy". Health is tracked via vmagent's
+    # up{job="cadvisor"} instead; disable the misleading container check.
+    healthcheck:
+      disable: true
     privileged: true
     devices:
       - /dev/kmsg
