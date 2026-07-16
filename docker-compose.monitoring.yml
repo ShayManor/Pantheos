@@ -68,7 +68,9 @@ services:
     restart: unless-stopped
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    # v0.55+ is required to resolve container names under Docker's newer
+    # `overlayfs` storage driver (cgroup v2); v0.49–v0.52 drop the `name=` label.
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
     network_mode: host
     command: ["-port=8081"]
     privileged: true

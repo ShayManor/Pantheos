@@ -48,7 +48,7 @@ groups:
           description: "The container restarted more than 3 times in 15 minutes."
 
       - alert: HostDiskLow
-        expr: (node_filesystem_avail_bytes{mountpoint="/host"} / node_filesystem_size_bytes{mountpoint="/host"}) < 0.10
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.10
         for: 5m
         labels: { severity: warning, host: minipc }
         annotations:
