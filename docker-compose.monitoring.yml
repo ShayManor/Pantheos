@@ -1,0 +1,109 @@
+# Pantheos monitoring overlay — the VictoriaMetrics + vmagent/vmalert +
+# Alertmanager stack (spec §4), plus the exporters it scrapes. Runs ALONGSIDE
+# the hand-tuned main stack:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+#
+# deploy.sh wires both -f files automatically. Everything is host-networked (like
+# the app), so services find each other and the host's Caddy at 127.0.0.1. The
+# Flask app queries VictoriaMetrics at 127.0.0.1:8428 with no compose change; when
+# VM is absent the Monitor station falls back to the deterministic mock.
+#
+# Inventory is STATIC (monitoring/vmagent.yml), not Docker-label auto-discovery.
+
+services:
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.106.1
+    network_mode: host
+    command:
+      - "-storageDataPath=/vmdata"
+      - "-retentionPeriod=12"
+      - "-httpListenAddr=:8428"
+    volumes:
+      - vmdata:/vmdata
+    restart: unless-stopped
+
+  vmagent:
+    image: victoriametrics/vmagent:v1.106.1
+    network_mode: host
+    command:
+      - "-promscrape.config=/etc/vmagent/vmagent.yml"
+      - "-remoteWrite.url=http://127.0.0.1:8428/api/v1/write"
+    volumes:
+      - ./monitoring/vmagent.yml:/etc/vmagent/vmagent.yml:ro
+    depends_on: [victoriametrics]
+    restart: unless-stopped
+
+  vmalert:
+    image: victoriametrics/vmalert:v1.106.1
+    network_mode: host
+    command:
+      - "-rule=/etc/vmalert/alerts.yml"
+      - "-datasource.url=http://127.0.0.1:8428"
+      - "-remoteWrite.url=http://127.0.0.1:8428"
+      - "-notifier.url=http://127.0.0.1:9093"
+      - "-evaluationInterval=30s"
+    volumes:
+      - ./monitoring/alerts.yml:/etc/vmalert/alerts.yml:ro
+    depends_on: [victoriametrics, alertmanager]
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    network_mode: host
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    network_mode: host
+    pid: host
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - "/:/host:ro,rslave"
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    network_mode: host
+    command: ["-port=8081"]
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    restart: unless-stopped
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    network_mode: host
+    command:
+      - "--config.file=/etc/blackbox/blackbox.yml"
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    restart: unless-stopped
+
+  # Per-site request telemetry (rps / 5xx / p95) Caddy's own metrics can't label
+  # by vhost. Reuses the app image's caddy_logs parser; entrypoint bypasses the
+  # DB bootstrap since it never touches Postgres.
+  caddy-log-exporter:
+    image: ghcr.io/shaymanor/pantheos:latest
+    entrypoint: ["python", "-m", "app.caddy_exporter"]
+    network_mode: host
+    environment:
+      CADDY_ACCESS_LOG: /var/log/caddy/access.log
+      CADDY_EXPORTER_PORT: "9109"
+    volumes:
+      - /var/log/caddy:/var/log/caddy:ro
+    restart: unless-stopped
+
+volumes:
+  vmdata:

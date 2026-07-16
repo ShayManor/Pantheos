@@ -1,0 +1,27 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: pantheos
+  group_by: ["alertname", "project"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+
+receivers:
+  - name: pantheos
+    # Every alert (firing + resolved) becomes a P0 ticket via the Flask webhook.
+    webhook_configs:
+      - url: "http://127.0.0.1:8000/api/monitor/alerts"
+        send_resolved: true
+
+    # Email is the spec's guaranteed channel (§4.8) but is off by default — no
+    # SMTP creds are wired. To enable, fill these in (or template them via a
+    # secret at deploy time) and set a `global.smtp_*` block above:
+    #   email_configs:
+    #     - to: "shay.manor@gmail.com"
+    #       from: "alerts@pantheos.app"
+    #       smarthost: "smtp.gmail.com:587"
+    #       auth_username: "alerts@pantheos.app"
+    #       auth_password: "<app-password>"
+    #       send_resolved: true

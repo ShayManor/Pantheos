@@ -1,0 +1,56 @@
+# vmalert rules. Each alert carries a `project` label so the webhook receiver
+# (/api/monitor/alerts) can open a P0 ticket on the matching Pantheos project.
+groups:
+  - name: pantheos-sites
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: pantheos_caddy_err_ratio{host="pantheos.app"} > 0.05
+        for: 2m
+        labels: { severity: critical, project: groundstation, host: minipc, route: pantheos.app }
+        annotations:
+          summary: "pantheos.app 5xx rate above 5%"
+          description: "The 5xx error ratio for pantheos.app has exceeded 5% for 2m."
+
+      - alert: HighErrorRate
+        expr: pantheos_caddy_err_ratio{host="researchviewer.org"} > 0.05
+        for: 2m
+        labels: { severity: critical, project: rviewer, host: minipc, route: researchviewer.org }
+        annotations:
+          summary: "researchviewer.org 5xx rate above 5%"
+          description: "The 5xx error ratio for researchviewer.org has exceeded 5% for 2m."
+
+      - alert: SiteDown
+        expr: probe_success{instance="https://pantheos.app"} == 0
+        for: 2m
+        labels: { severity: critical, project: groundstation, host: minipc, route: pantheos.app }
+        annotations:
+          summary: "pantheos.app is down"
+          description: "Blackbox probe of https://pantheos.app has failed for 2m."
+
+      - alert: SiteDown
+        expr: probe_success{instance="https://researchviewer.org"} == 0
+        for: 2m
+        labels: { severity: critical, project: rviewer, host: minipc, route: researchviewer.org }
+        annotations:
+          summary: "researchviewer.org is down"
+          description: "Blackbox probe of https://researchviewer.org has failed for 2m."
+
+  - name: pantheos-infra
+    interval: 30s
+    rules:
+      - alert: ContainerCrashLooping
+        expr: changes(container_start_time_seconds{name="pantheos-app-1"}[15m]) > 3
+        for: 0m
+        labels: { severity: warning, project: groundstation, host: minipc }
+        annotations:
+          summary: "pantheos-app-1 is crash-looping"
+          description: "The container restarted more than 3 times in 15 minutes."
+
+      - alert: HostDiskLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/host"} / node_filesystem_size_bytes{mountpoint="/host"}) < 0.10
+        for: 5m
+        labels: { severity: warning, host: minipc }
+        annotations:
+          summary: "minipc root disk below 10% free"
+          description: "Free space on the minipc root filesystem has dropped below 10%."

@@ -1,0 +1,52 @@
+# Static scrape config — explicit targets, NOT Docker-label auto-discovery.
+# Adding a service means adding a target here, on purpose (see monitor_inventory.py).
+global:
+  scrape_interval: 15s
+  external_labels:
+    host: minipc
+
+scrape_configs:
+  # Caddy's native Prometheus metrics (gateway-wide request/latency/5xx).
+  - job_name: caddy
+    static_configs:
+      - targets: ["127.0.0.1:2019"]
+
+  # Host CPU / memory / disk.
+  - job_name: node
+    static_configs:
+      - targets: ["127.0.0.1:9100"]
+
+  # Per-container CPU / memory / restarts, keyed by container name.
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["127.0.0.1:8081"]
+
+  # Per-site request rate / 5xx / p95 (Caddy access-log exporter).
+  - job_name: caddy_sites
+    static_configs:
+      - targets: ["127.0.0.1:9109"]
+
+  # The stack observing itself.
+  - job_name: victoriametrics
+    static_configs:
+      - targets: ["127.0.0.1:8428"]
+  - job_name: vmagent
+    static_configs:
+      - targets: ["127.0.0.1:8429"]
+
+  # Blackbox uptime probes of the public URLs (probe_success{instance=...}).
+  - job_name: blackbox
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - https://pantheos.app
+          - https://researchviewer.org
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
