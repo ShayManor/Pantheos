@@ -72,7 +72,7 @@ def test_container_crud(session):
 
 def test_container_create_validation(session):
     assert tools.create_container(session, " ", "ghstats", "minipc", "api")["error"] == "id required"
-    assert tools.create_container(session, "gh-stats-api", "ghstats", "minipc", "api")["error"] == "container exists"
+    assert tools.create_container(session, "ghstats-generator", "ghstats", "minipc", "api")["error"] == "container exists"
     assert tools.create_container(session, "c1", "nope", "minipc", "api")["error"] == "unknown project"
     assert tools.create_container(session, "c1", "ghstats", "nope", "api")["error"] == "unknown host"
     assert tools.create_container(session, "c1", "ghstats", "minipc", "api", status="bad")["error"] == "invalid status"
@@ -80,7 +80,7 @@ def test_container_create_validation(session):
 
 def test_container_update_validation_and_missing(session):
     assert tools.update_container(session, "nope") == {"error": "unknown container", "id": "nope"}
-    assert tools.update_container(session, "gh-stats-api", status="bad")["error"] == "invalid status"
-    assert tools.update_container(session, "gh-stats-api", project_key="nope")["error"] == "unknown project"
-    assert tools.update_container(session, "gh-stats-api", host_id="nope")["error"] == "unknown host"
+    assert tools.update_container(session, "ghstats-generator", status="bad")["error"] == "invalid status"
+    assert tools.update_container(session, "ghstats-generator", project_key="nope")["error"] == "unknown project"
+    assert tools.update_container(session, "ghstats-generator", host_id="nope")["error"] == "unknown host"
     assert tools.delete_container(session, "nope") == {"error": "unknown container", "id": "nope"}

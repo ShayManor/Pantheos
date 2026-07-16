@@ -12,13 +12,13 @@ from . import caddy_logs
 
 # container id -> telemetry sources
 INVENTORY = {
-    "gs-platform": {
+    "pantheos-app-1": {
         "cadvisor": "pantheos-app-1",
         "hosts": caddy_logs.PANTHEOS_HOSTS,
         "site": "pantheos.app",          # the caddy-exporter `host` label
         "probe": "https://pantheos.app",
     },
-    "rviewer": {
+    "researchviewer": {
         "cadvisor": "researchviewer",
         "hosts": caddy_logs.RESEARCHVIEWER_HOSTS,
         "site": "researchviewer.org",

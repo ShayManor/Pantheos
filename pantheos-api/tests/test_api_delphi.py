@@ -1,7 +1,7 @@
 def test_context(client):
     d = client.get("/api/delphi/context").get_json()
     assert len(d["models"]) == 3
-    assert len(d["connectors"]) == 1
+    assert len(d["connectors"]) == 5
     assert d["connectors"][0]["name"] == "Pantheos"
     assert int(d["connectors"][0]["tools"]) >= 20
     assert len(d["skills"]) == 7

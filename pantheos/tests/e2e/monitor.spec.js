@@ -11,24 +11,24 @@ test("monitor overview and compute toggle", async ({ page }) => {
 
 test("project monitor detail shows the 5xx breach chart", async ({ page }) => {
   await navTo(page, "Monitor");
-  await page.locator(".gs-pcard", { hasText: "GitHub profile analytics" }).click();
+  await page.locator(".gs-pcard", { hasText: "GitHub README widgets" }).click();
   await expect(page.locator(".gs-ref", { hasText: "GHS-0311" })).toBeVisible();
   await expect(page.locator(".recharts-surface").first()).toBeVisible();
 });
 
 test("container detail shows metric tiles and cpu chart", async ({ page }) => {
   await navTo(page, "Monitor");
-  await page.locator(".gs-pcard", { hasText: "GitHub profile analytics" }).click();
-  await page.locator(".gs-svc", { hasText: "gh-stats-api" }).click();
-  await expect(page.getByRole("heading", { name: "gh-stats-api" })).toBeVisible();
+  await page.locator(".gs-pcard", { hasText: "GitHub README widgets" }).click();
+  await page.locator(".gs-svc", { hasText: "ghstats-edge" }).click();
+  await expect(page.getByRole("heading", { name: "ghstats-edge" })).toBeVisible();
   await expect(page.getByText("CPU · LAST 20 MIN")).toBeVisible();
   await expect(page.locator(".recharts-surface").first()).toBeVisible();
 });
 
 test("container logs render and filter by level", async ({ page }) => {
   await navTo(page, "Monitor");
-  await page.locator(".gs-pcard", { hasText: "GitHub profile analytics" }).click();
-  await page.locator(".gs-svc", { hasText: "gh-stats-api" }).click();
+  await page.locator(".gs-pcard", { hasText: "GitHub README widgets" }).click();
+  await page.locator(".gs-svc", { hasText: "ghstats-edge" }).click();
   await page.getByRole("button", { name: "View logs" }).click();
   await expect(page.getByRole("heading", { name: "Logs" })).toBeVisible();
   await expect(page.locator(".gs-logline").first()).toBeVisible();
@@ -42,5 +42,5 @@ test("host detail lists that host's containers", async ({ page }) => {
   await page.locator(".gs-toggle button", { hasText: "Compute" }).click();
   await page.locator(".gs-pcard", { hasText: "minipc" }).click();
   await expect(page.getByRole("heading", { name: "minipc" })).toBeVisible();
-  await expect(page.locator(".gs-svc", { hasText: "gs-platform" })).toBeVisible();
+  await expect(page.locator(".gs-svc", { hasText: "pantheos-app-1" })).toBeVisible();
 });

@@ -14,7 +14,7 @@ def test_projects(client):
     assert "ghstats" in d
     assert d["ghstats"]["status"] == "flt"
     assert d["ghstats"]["area"] == "SIDE PROJECTS"
-    assert d["ghstats"]["users"] == 3820
+    assert d["ghstats"]["users"] == 146
 
 
 def test_hosts(client):
@@ -25,20 +25,20 @@ def test_hosts(client):
 
 def test_containers(client):
     d = client.get("/api/containers").get_json()
-    assert len(d) == 9
-    api = next(c for c in d if c["id"] == "gh-stats-api")
+    assert len(d) == 15
+    api = next(c for c in d if c["id"] == "ghstats-generator")
     assert api["cpuN"] == 38
     assert api["proj"] == "ghstats"
 
 
 def test_container_metrics(client):
-    d = client.get("/api/containers/gh-stats-api/metrics").get_json()
+    d = client.get("/api/containers/ghstats-generator/metrics").get_json()
     assert d["off"] is False and len(d["series"]) == 20
     assert client.get("/api/containers/NOPE/metrics").status_code == 404
 
 
 def test_container_logs(client):
-    d = client.get("/api/containers/gh-stats-api/logs").get_json()
+    d = client.get("/api/containers/ghstats-generator/logs").get_json()
     assert len(d["lines"]) > 0
     assert client.get("/api/containers/NOPE/logs").status_code == 404
 
@@ -79,7 +79,7 @@ _HEALTHY = {
 
 
 def _gs(client):
-    return next(c for c in client.get("/api/containers").get_json() if c["id"] == "gs-platform")
+    return next(c for c in client.get("/api/containers").get_json() if c["id"] == "pantheos-app-1")
 
 
 def test_container_values_from_victoria(client, monkeypatch):
@@ -136,19 +136,19 @@ def test_container_partial_vm_keeps_seeded(client, monkeypatch):
 
 def test_noninventory_container_stays_mock_under_vm(client, monkeypatch):
     _use_vm(monkeypatch, _HEALTHY)
-    api = next(c for c in client.get("/api/containers").get_json() if c["id"] == "gh-stats-api")
+    api = next(c for c in client.get("/api/containers").get_json() if c["id"] == "ghstats-generator")
     assert api["cpuN"] == 38 and api["rps"] == "142/s"  # seeded
 
 
 def test_container_metrics_from_victoria(client, monkeypatch):
     _use_vm(monkeypatch, range_vals=[3.0] * 20)
-    d = client.get("/api/containers/gs-platform/metrics").get_json()
+    d = client.get("/api/containers/pantheos-app-1/metrics").get_json()
     assert len(d["series"]) == 20 and d["series"][0] == {"d": 0, "v": 3.0}
 
 
 def test_container_metrics_falls_back_when_query_fails(client, monkeypatch):
     _use_vm(monkeypatch, range_vals=None)  # VM up but query returns nothing
-    d = client.get("/api/containers/gs-platform/metrics").get_json()
+    d = client.get("/api/containers/pantheos-app-1/metrics").get_json()
     assert len(d["series"]) == 20
 
 
@@ -187,14 +187,14 @@ def _caddy_log(tmp_path, monkeypatch):
 
 def test_pantheos_logs_from_caddy(client, tmp_path, monkeypatch):
     _caddy_log(tmp_path, monkeypatch)
-    logs = client.get("/api/containers/gs-platform/logs").get_json()["lines"]
+    logs = client.get("/api/containers/pantheos-app-1/logs").get_json()["lines"]
     assert any("/api/tickets" in l["msg"] for l in logs)
     assert any(l["lvl"] == "err" for l in logs)  # the 5xx line
 
 
 def test_pantheos_logs_fall_back_to_mock(client, monkeypatch):
     monkeypatch.delenv("CADDY_ACCESS_LOG", raising=False)
-    assert len(client.get("/api/containers/gs-platform/logs").get_json()["lines"]) > 0
+    assert len(client.get("/api/containers/pantheos-app-1/logs").get_json()["lines"]) > 0
 
 
 def _rv_caddy_log(tmp_path, monkeypatch):
@@ -212,7 +212,7 @@ def _rv_caddy_log(tmp_path, monkeypatch):
 
 def test_rviewer_logs_from_caddy(client, tmp_path, monkeypatch):
     _rv_caddy_log(tmp_path, monkeypatch)
-    logs = client.get("/api/containers/rviewer/logs").get_json()["lines"]
+    logs = client.get("/api/containers/researchviewer/logs").get_json()["lines"]
     assert logs and all("/paper/" in l["msg"] for l in logs)
 
 

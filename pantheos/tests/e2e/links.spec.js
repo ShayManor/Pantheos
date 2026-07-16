@@ -16,12 +16,12 @@ test("a targetless ticket link stays a non-navigating element", async ({ page })
 
 test("downloading container logs saves a real file", async ({ page }) => {
   await page.locator(".gs-nav-item", { hasText: "Monitor" }).click();
-  await page.locator(".gs-pcard", { hasText: "GitHub profile analytics" }).click();
-  await page.locator(".gs-svc", { hasText: "gh-stats-api" }).click();
+  await page.locator(".gs-pcard", { hasText: "GitHub README widgets" }).click();
+  await page.locator(".gs-svc", { hasText: "ghstats-edge" }).click();
   await page.getByRole("button", { name: "View logs" }).click();
   const [download] = await Promise.all([
     page.waitForEvent("download"),
     page.getByRole("button", { name: "Download" }).click(),
   ]);
-  expect(download.suggestedFilename()).toBe("gh-stats-api.log");
+  expect(download.suggestedFilename()).toBe("ghstats-edge.log");
 });
