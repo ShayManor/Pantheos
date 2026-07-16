@@ -1,3 +1,9 @@
+import json
+
+from app import victoria
+from app.api import monitor
+
+
 def test_areas(client):
     names = [a["name"] for a in client.get("/api/areas").get_json()]
     assert "IDEAS LAB" in names and "STAT 511" in names
@@ -42,8 +48,130 @@ def test_monitor_series(client):
     assert len(client.get("/api/monitor/errseries").get_json()) == 14
 
 
-import json
+# --------------------------------------------------------------- VictoriaMetrics
+# Container current-values, per-container series, and the overview charts come
+# from VictoriaMetrics when it's reachable. We monkeypatch the victoria client so
+# tests stay hermetic (no TSDB running); absent VM, everything falls back to mock.
 
+def _use_vm(monkeypatch, values=None, range_vals=None, available=True):
+    values = values or {}
+    monkeypatch.setattr(victoria, "available", lambda: available)
+
+    def q(promql):
+        for sub, val in values.items():
+            if sub in promql:
+                return val
+        return None
+
+    monkeypatch.setattr(victoria, "query", q)
+    monkeypatch.setattr(victoria, "query_range", lambda promql, **kw: range_vals)
+
+
+_HEALTHY = {
+    "container_cpu_usage": 17.4,
+    "container_memory_working_set": 340 * 2 ** 20,
+    "changes(container_start_time": 0,
+    "pantheos_caddy_rps": 12.3,
+    "pantheos_caddy_err_ratio": 0.001,
+    "pantheos_caddy_p95_ms": 205.0,
+    "probe_success": 1,
+}
+
+
+def _gs(client):
+    return next(c for c in client.get("/api/containers").get_json() if c["id"] == "gs-platform")
+
+
+def test_container_values_from_victoria(client, monkeypatch):
+    _use_vm(monkeypatch, _HEALTHY)
+    gs = _gs(client)
+    assert gs["cpu"] == "17%" and gs["cpuN"] == 17
+    assert gs["mem"] == "340M"
+    assert gs["restarts"] == 0
+    assert gs["rps"] == "12.3/s"
+    assert gs["err"] == "0.1%"
+    assert gs["p95"] == "205 ms"
+    assert gs["up"] == "AOS" and gs["status"] == "go"
+
+
+def test_container_status_caution(client, monkeypatch):
+    _use_vm(monkeypatch, {**_HEALTHY, "pantheos_caddy_p95_ms": 500.0})
+    assert _gs(client)["status"] == "cau"
+
+
+def test_container_status_fault_by_errors(client, monkeypatch):
+    _use_vm(monkeypatch, {**_HEALTHY, "pantheos_caddy_err_ratio": 0.03})
+    gs = _gs(client)
+    assert gs["err"] == "3.0%" and gs["status"] == "flt"
+
+
+def test_container_status_fault_by_restarts(client, monkeypatch):
+    _use_vm(monkeypatch, {**_HEALTHY, "changes(container_start_time": 5})
+    assert _gs(client)["status"] == "flt"
+
+
+def test_container_down_from_blackbox(client, monkeypatch):
+    _use_vm(monkeypatch, {**_HEALTHY, "probe_success": 0})
+    gs = _gs(client)
+    assert gs["up"] == "LOS" and gs["status"] == "los"
+
+
+def test_container_memory_gigabytes(client, monkeypatch):
+    _use_vm(monkeypatch, {**_HEALTHY, "container_memory_working_set": 2 * 2 ** 30})
+    assert _gs(client)["mem"] == "2.0G"
+
+
+def test_container_partial_vm_keeps_seeded(client, monkeypatch):
+    # Only resource metrics present (exporter/blackbox down): request fields and
+    # status stay at their seeded mock values rather than blanking.
+    _use_vm(monkeypatch, {
+        "container_cpu_usage": 5.0,
+        "container_memory_working_set": 96 * 2 ** 20,
+    })
+    gs = _gs(client)
+    assert gs["cpu"] == "5%" and gs["mem"] == "96M"
+    assert gs["rps"] == "12/s"        # seeded, untouched
+    assert gs["status"] == "go"       # seeded, not recomputed
+
+
+def test_noninventory_container_stays_mock_under_vm(client, monkeypatch):
+    _use_vm(monkeypatch, _HEALTHY)
+    api = next(c for c in client.get("/api/containers").get_json() if c["id"] == "gh-stats-api")
+    assert api["cpuN"] == 38 and api["rps"] == "142/s"  # seeded
+
+
+def test_container_metrics_from_victoria(client, monkeypatch):
+    _use_vm(monkeypatch, range_vals=[3.0] * 20)
+    d = client.get("/api/containers/gs-platform/metrics").get_json()
+    assert len(d["series"]) == 20 and d["series"][0] == {"d": 0, "v": 3.0}
+
+
+def test_container_metrics_falls_back_when_query_fails(client, monkeypatch):
+    _use_vm(monkeypatch, range_vals=None)  # VM up but query returns nothing
+    d = client.get("/api/containers/gs-platform/metrics").get_json()
+    assert len(d["series"]) == 20
+
+
+def test_usage_and_errseries_from_victoria(client, monkeypatch):
+    _use_vm(monkeypatch, range_vals=[2.0] * 14)
+    assert client.get("/api/monitor/usage").get_json()[0] == {"d": 0, "v": 2}
+    assert client.get("/api/monitor/errseries").get_json()[0] == {"d": 0, "v": 2}
+
+
+def test_usage_and_errseries_fall_back(client, monkeypatch):
+    _use_vm(monkeypatch, range_vals=None)
+    assert len(client.get("/api/monitor/usage").get_json()) == 14
+    assert len(client.get("/api/monitor/errseries").get_json()) == 14
+
+
+def test_parse_pct_helper():
+    assert monitor._parse_pct("6.1%") == 6.1
+    assert monitor._parse_pct("—") == 0.0
+
+
+# ----------------------------------------------------------------- Caddy access log
+# The access log still drives per-container LOG LINES and the project visitor
+# count (VictoriaMetrics stores metrics, not log lines or per-visitor identity).
 
 def _caddy_log(tmp_path, monkeypatch):
     p = tmp_path / "access.log"
@@ -57,23 +185,16 @@ def _caddy_log(tmp_path, monkeypatch):
     return p
 
 
-def test_pantheos_container_uses_caddy_log(client, tmp_path, monkeypatch):
+def test_pantheos_logs_from_caddy(client, tmp_path, monkeypatch):
     _caddy_log(tmp_path, monkeypatch)
-    m = client.get("/api/containers/gs-platform/metrics").get_json()
-    assert m["off"] is False and len(m["series"]) == 20
     logs = client.get("/api/containers/gs-platform/logs").get_json()["lines"]
     assert any("/api/tickets" in l["msg"] for l in logs)
     assert any(l["lvl"] == "err" for l in logs)  # the 5xx line
-    gs = next(c for c in client.get("/api/containers").get_json() if c["id"] == "gs-platform")
-    assert gs["rps"].endswith("/s") and gs["err"] == "20.0%"  # 1 of 5 is 5xx
 
 
-def test_pantheos_container_falls_back_to_mock_without_log(client, monkeypatch):
+def test_pantheos_logs_fall_back_to_mock(client, monkeypatch):
     monkeypatch.delenv("CADDY_ACCESS_LOG", raising=False)
-    assert len(client.get("/api/containers/gs-platform/metrics").get_json()["series"]) == 20
     assert len(client.get("/api/containers/gs-platform/logs").get_json()["lines"]) > 0
-    gs = next(c for c in client.get("/api/containers").get_json() if c["id"] == "gs-platform")
-    assert gs["rps"] == "12/s"  # seeded mock value, untouched
 
 
 def _rv_caddy_log(tmp_path, monkeypatch):
@@ -89,14 +210,10 @@ def _rv_caddy_log(tmp_path, monkeypatch):
     return p
 
 
-def test_rviewer_container_uses_caddy_log(client, tmp_path, monkeypatch):
+def test_rviewer_logs_from_caddy(client, tmp_path, monkeypatch):
     _rv_caddy_log(tmp_path, monkeypatch)
-    m = client.get("/api/containers/rviewer/metrics").get_json()
-    assert m["off"] is False and len(m["series"]) == 20
     logs = client.get("/api/containers/rviewer/logs").get_json()["lines"]
     assert logs and all("/paper/" in l["msg"] for l in logs)
-    rv = next(c for c in client.get("/api/containers").get_json() if c["id"] == "rviewer")
-    assert rv["rps"].endswith("/s") and rv["err"] == "0.0%"
 
 
 def test_rviewer_project_users_are_real_visitor_count(client, tmp_path, monkeypatch):

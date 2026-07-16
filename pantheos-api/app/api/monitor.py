@@ -128,7 +128,7 @@ def _create_alert_ticket(tid, labels, annotations):
     if project is not None:
         area_id = project.area_id
     else:
-        area_id = db().query(Area.id).order_by(Area.position).scalar()
+        area_id = db().query(Area.id).order_by(Area.position).limit(1).scalar()
     title = annotations.get("summary") or labels.get("alertname") or "monitoring alert"
     detail = [f"{k}: {v}" for k, v in (
         ("rule", labels.get("alertname")), ("host", labels.get("host")),
