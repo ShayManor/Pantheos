@@ -1,0 +1,35 @@
+name: deploy-mcp-connectors
+
+# Injects Delphi's external MCP connector API keys into the minipc's
+# ~/.hermes/.env. Runs on the self-hosted `minipc` runner so the secret values
+# land on the box that already trusts them — they are never read out of GitHub.
+# Registering the servers with Hermes + restarting is done separately over SSH.
+on:
+  workflow_dispatch:
+
+jobs:
+  seed-env:
+    runs-on: [self-hosted, Linux, X64]
+    env:
+      # Hermes stores per-server header tokens as MCP_<NAME>_API_KEY; wandb also
+      # gets its native name. Values come straight from repo secrets.
+      MCP_GITHUB_API_KEY: ${{ secrets.GH_PAT }}
+      MCP_HUGGINGFACE_API_KEY: ${{ secrets.HF_API_KEY }}
+      MCP_EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+      MCP_WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+    steps:
+      - name: Upsert connector API keys into ~/.hermes/.env
+        run: |
+          set -eu
+          ENV_FILE="$HOME/.hermes/.env"
+          umask 077
+          touch "$ENV_FILE"
+          for KEY in MCP_GITHUB_API_KEY MCP_HUGGINGFACE_API_KEY MCP_EXA_API_KEY MCP_WANDB_API_KEY WANDB_API_KEY; do
+            VAL="$(printenv "$KEY")"
+            grep -vE "^${KEY}=" "$ENV_FILE" > "$ENV_FILE.tmp" 2>/dev/null || true
+            printf '%s=%s\n' "$KEY" "$VAL" >> "$ENV_FILE.tmp"
+            mv "$ENV_FILE.tmp" "$ENV_FILE"
+          done
+          chmod 600 "$ENV_FILE"
+          echo "Wrote 5 connector keys to $ENV_FILE (values masked in logs)."

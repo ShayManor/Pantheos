@@ -118,3 +118,26 @@ def metrics(hosts):
 def visitors(hosts):
     """Distinct client IPs seen for ``hosts`` over the tail window."""
     return len({e["ip"] for e in _entries(hosts) if e["ip"]})
+
+
+def stats(hosts):
+    """Numeric telemetry for ``hosts`` — the raw values the exporter publishes.
+
+    Returns floats/ints (unlike ``rollup``, which formats for the UI): requests
+    per second, 5xx ratio in [0, 1], p95 latency in ms, distinct visitors, and
+    the request count over the tail window.
+    """
+    es = _entries(hosts)
+    n = len(es)
+    if not es:
+        return {"rps": 0.0, "err_ratio": 0.0, "p95_ms": 0.0, "visitors": 0, "requests": 0}
+    span = max(es[-1]["ts"] - es[0]["ts"], 1.0)
+    durs = sorted(e["dur"] for e in es)
+    p95 = durs[max(0, math.ceil(0.95 * n) - 1)] * 1000
+    return {
+        "rps": n / span,
+        "err_ratio": sum(1 for e in es if e["status"] >= 500) / n,
+        "p95_ms": p95,
+        "visitors": len({e["ip"] for e in es if e["ip"]}),
+        "requests": n,
+    }
