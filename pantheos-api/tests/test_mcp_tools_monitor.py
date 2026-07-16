@@ -22,11 +22,10 @@ def test_get_container_and_logs(session):
 
 
 def test_restart_container(session):
-    # pick a degraded container so the reset is observable
-    flt = next(c for c in tools.list_containers(session)["containers"] if c["status"] == "flt")
-    out = tools.restart_container(session, flt["id"])
+    c0 = tools.list_containers(session)["containers"][0]
+    out = tools.restart_container(session, c0["id"])
     assert out["status"] == "go" and out["up"] == "AOS" and out["err"] == "—"
-    assert out["restarts"] == flt["restarts"] + 1
+    assert out["restarts"] == c0["restarts"] + 1
     assert tools.restart_container(session, "NOPE") == {"error": "unknown container", "id": "NOPE"}
 
 

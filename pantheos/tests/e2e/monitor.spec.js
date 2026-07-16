@@ -27,8 +27,8 @@ test("container detail shows metric tiles and cpu chart", async ({ page }) => {
 
 test("container logs render and filter by level", async ({ page }) => {
   await navTo(page, "Monitor");
-  await page.locator(".gs-pcard", { hasText: "GitHub README widgets" }).click();
-  await page.locator(".gs-svc", { hasText: "ghstats-edge" }).click();
+  await page.locator(".gs-pcard", { hasText: "MERLIN" }).click();
+  await page.locator(".gs-svc", { hasText: "merlin-planner" }).click();
   await page.getByRole("button", { name: "View logs" }).click();
   await expect(page.getByRole("heading", { name: "Logs" })).toBeVisible();
   await expect(page.locator(".gs-logline").first()).toBeVisible();

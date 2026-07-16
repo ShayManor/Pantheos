@@ -2,8 +2,8 @@ import { test, expect } from "./utils.js";
 
 test("ticket github links are real external anchors", async ({ page }) => {
   await page.locator(".gs-trow", { hasText: "GRD-0182" }).click();
-  const link = page.locator("a.gs-link", { hasText: "ideas-lab/guardrail #182" });
-  await expect(link).toHaveAttribute("href", "https://github.com/ideas-lab/guardrail/issues/182");
+  const link = page.locator("a.gs-link", { hasText: "ShayManor/Guardrail-Distillation #182" });
+  await expect(link).toHaveAttribute("href", "https://github.com/ShayManor/Guardrail-Distillation/issues/182");
   await expect(link).toHaveAttribute("target", "_blank");
 });
 

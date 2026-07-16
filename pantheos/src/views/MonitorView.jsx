@@ -1,11 +1,14 @@
+import { useEffect, useState } from "react";
 import {
-  Activity, Cpu, Gauge, ListChecks, Satellite, Server, Signal, SignalZero,
+  Activity, AlertTriangle, Cpu, Gauge, ListChecks, Satellite, Server, Signal, SignalZero,
 } from "lucide-react";
 import { useNav } from "../nav.jsx";
 import { StatusPill } from "../components/pills.jsx";
 import ContainerTable from "../components/ContainerTable.jsx";
+import AreaSpark from "../components/AreaSpark.jsx";
 import { UsersChart } from "./ProjectsView.jsx";
 import { HOST_ICONS, rollup } from "../lib/helpers.js";
+import { api } from "../api.js";
 
 export default function MonitorView({ mode, setMode }) {
   const { go, containers, projects, hosts } = useNav();
@@ -99,6 +102,8 @@ export function MonProjectDetail({ pk }) {
   const { go, projects, containers } = useNav();
   const p = projects[pk];
   const conts = containers.filter((c) => c.proj === pk);
+  const [errData, setErrData] = useState([]);
+  useEffect(() => { if (pk === "ghstats") api.errseries().then(setErrData); }, [pk]);
   return (
     <>
       <div className="gs-eyebrow">{p.area}</div>
@@ -115,6 +120,13 @@ export function MonProjectDetail({ pk }) {
             <div style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--ink-2)" }}><b style={{ color: "var(--ink)" }}>{p.users.toLocaleString()}</b> active</div>
           </div>
           <UsersChart />
+        </div>
+      )}
+
+      {pk === "ghstats" && (
+        <div className="gs-card" style={{ padding: "18px 20px", marginBottom: 22 }}>
+          <div className="gs-section-h" style={{ marginBottom: 14 }}><AlertTriangle size={12} color="var(--fault)" />gh-stats · 5XX RATE · breach at t-11m → <span className="gs-ref" onClick={() => go({ view: "queue", ticketId: "GHS-0311" })}>GHS-0311</span></div>
+          <AreaSpark data={errData} color="#BF3A3A" height={120} yWidth={44} gid="ge" />
         </div>
       )}
 

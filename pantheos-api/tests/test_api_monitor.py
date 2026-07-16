@@ -27,7 +27,7 @@ def test_containers(client):
     d = client.get("/api/containers").get_json()
     assert len(d) == 15
     api = next(c for c in d if c["id"] == "ghstats-generator")
-    assert api["cpuN"] == 38
+    assert api["cpuN"] == 0                            # seeded neutral; live metrics come from the monitor
     assert api["proj"] == "ghstats"
 
 
@@ -130,14 +130,14 @@ def test_container_partial_vm_keeps_seeded(client, monkeypatch):
     })
     gs = _gs(client)
     assert gs["cpu"] == "5%" and gs["mem"] == "96M"
-    assert gs["rps"] == "12/s"        # seeded, untouched
+    assert gs["rps"] == "—"           # seeded (neutral), untouched
     assert gs["status"] == "go"       # seeded, not recomputed
 
 
 def test_noninventory_container_stays_mock_under_vm(client, monkeypatch):
     _use_vm(monkeypatch, _HEALTHY)
     api = next(c for c in client.get("/api/containers").get_json() if c["id"] == "ghstats-generator")
-    assert api["cpuN"] == 38 and api["rps"] == "142/s"  # seeded
+    assert api["cpuN"] == 0 and api["rps"] == "—"     # seeded (neutral), non-inventory stays as-is
 
 
 def test_container_metrics_from_victoria(client, monkeypatch):

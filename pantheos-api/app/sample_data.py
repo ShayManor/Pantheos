@@ -18,7 +18,7 @@ SAMPLE_TICKETS = [
      "result": "Ablation confirms the teacher gate is the load-bearing component; camera-ready draft ready for your review.",
      "deps": [],
      "links": [
-         {"kind": "github_issue", "label": "ideas-lab/guardrail #182", "url": "/issues/182"},
+         {"kind": "github_issue", "label": "ShayManor/Guardrail-Distillation #182", "url": "/issues/182"},
          {"kind": "file", "label": "reviews_r1_r2.pdf", "url": "attach"}]},
 
     {"id": "GHS-0311", "proj": "ghstats", "area_id": "side",
@@ -49,7 +49,7 @@ SAMPLE_TICKETS = [
      "body": "Move the edge-reconstruction stage off the Jetson Orin Nano onto the Rubik Pi 3 to free the Orin for the planner. Needs INT8 quantization of the extractor, a QNN delegate path, and a latency comparison at 640×480. Target < 22ms/frame.",
      "report": None, "result": None,
      "deps": [{"id": "MER-0088", "title": "INT8 quant of extractor", "done": False}],
-     "links": [{"kind": "github_issue", "label": "ideas-lab/merlin #93", "url": "/issues/93"}]},
+     "links": [{"kind": "github_issue", "label": "ShayManor/Merlin #93", "url": "/issues/93"}]},
 
     {"id": "STA-0044", "proj": None, "area_id": "stat511",
      "title": "STAT 511 · Problem Set 4", "pri": 1, "deadline_hours": 72,
