@@ -33,6 +33,7 @@ export default function FlightView() {
   const [atts, setAtts] = useState([]);
   const [thinking, setThinking] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [interim, setInterim] = useState("");
   const [drawer, setDrawer] = useState(null); // null | connectors | skills | memory
   const [histOpen, setHistOpen] = useState(false);
   const [sessions, setSessions] = useState([]);
@@ -45,6 +46,7 @@ export default function FlightView() {
   const [newSkill, setNewSkill] = useState("");
   const fileRef = useRef(null);
   const scrollRef = useRef(null);
+  const recRef = useRef(null);
 
   useEffect(() => {
     api.delphiContext().then((d) => {
@@ -57,6 +59,7 @@ export default function FlightView() {
     });
   }, []);
   useEffect(() => { scrollRef.current?.scrollTo(0, 1e6); }, [msgs, thinking]);
+  useEffect(() => () => recRef.current?.abort(), []);
 
   const suggestions = [
     ["What's due this week?", "Deadlines, ranked by urgency"],
@@ -92,7 +95,34 @@ export default function FlightView() {
     const picked = Array.from(e.target.files || []).map((f) => ({ name: f.name, img: f.type.startsWith("image/") }));
     setAtts((a) => [...a, ...picked]); e.target.value = "";
   };
-  const stopRec = () => { setRecording(false); };
+  const startRec = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { toast("Dictation isn't supported in this browser"); return; }
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = "en-US";
+    const base = input.trim() ? input.trimEnd() + " " : "";
+    let finalText = "";
+    rec.onresult = (e) => {
+      let live = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else live += r[0].transcript;
+      }
+      setInput(base + finalText);
+      setInterim(live);
+    };
+    rec.onerror = (e) => {
+      if (e.error !== "aborted" && e.error !== "no-speech") toast(`Mic error: ${e.error}`);
+    };
+    rec.onend = () => { setRecording(false); setInterim(""); recRef.current = null; };
+    recRef.current = rec;
+    try { rec.start(); setRecording(true); }
+    catch (err) { recRef.current = null; toast("Couldn't start dictation"); }
+  };
+  const stopRec = () => { recRef.current?.stop(); setRecording(false); };
   const addServer = () => {
     if (!newSrv.name.trim()) return;
     api.addConnector(newSrv.name.trim(), newSrv.url.trim()).then((srv) => {
@@ -236,13 +266,13 @@ export default function FlightView() {
               <span className="dot flt" style={{ boxShadow: "none" }} />
               <span className="gs-rec-label">Listening…</span>
               <div className="gs-wave">{Array.from({ length: 7 }).map((_, i) => <i key={i} />)}</div>
-              <div style={{ flex: 1 }} />
+              <div style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--ink-2)", fontSize: 12.5 }}>{interim}</div>
               <button className="gs-btn ghost" onClick={stopRec}><Square size={13} />Stop</button>
             </div>
           ) : (
             <>
               <button className="gs-attach-btn" onClick={() => fileRef.current?.click()} title="Attach files or images"><Paperclip size={17} /></button>
-              <button className="gs-mic" onClick={() => setRecording(true)} title="Dictate"><Mic size={17} /></button>
+              <button className="gs-mic" onClick={startRec} title="Dictate"><Mic size={17} /></button>
               <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Ask Delphi, attach a file, or dictate…" />
               <button className="gs-btn primary" onClick={() => send()}><Send size={15} /></button>
             </>

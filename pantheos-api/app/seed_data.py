@@ -39,7 +39,7 @@ PROJECTS = [
          "Under anonymous review — keep author/institution identifiers and public release links out of the repo.",
      ]},
     {"key": "ghstats", "area_id": "side", "name": "gh-stats", "autonomy": "full",
-     "status": "flt", "users": 146, "repo": "ShayManor/github-readme-stats",
+     "status": "go", "users": 146, "repo": "ShayManor/github-readme-stats",
      "blurb": "GitHub README widgets — editable, cached, drop-in profile stats",
      "notes": [
          "Live at gh-stats.com; a single SVG widget dropped into a profile README via /api/<username>.",

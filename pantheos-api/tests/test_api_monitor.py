@@ -12,7 +12,7 @@ def test_areas(client):
 def test_projects(client):
     d = client.get("/api/projects").get_json()
     assert "ghstats" in d
-    assert d["ghstats"]["status"] == "flt"
+    assert d["ghstats"]["status"] == "go"
     assert d["ghstats"]["area"] == "SIDE PROJECTS"
     assert d["ghstats"]["users"] == 146
 
