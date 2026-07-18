@@ -217,11 +217,21 @@ class AgentRun(Base):
     status = Column(String, nullable=False)
     cost = Column(String, nullable=False)
     when = Column(String, nullable=False)
+    reasoning = Column(Text, nullable=True)
+    tools = Column(JSON, nullable=True)
+    output = Column(Text, nullable=True)
     position = Column(Integer, nullable=False, default=0)
 
     def to_dict(self):
-        return {"ticket": self.ticket, "kind": self.kind,
-                "status": self.status, "cost": self.cost, "when": self.when}
+        d = {"ticket": self.ticket, "kind": self.kind,
+             "status": self.status, "cost": self.cost, "when": self.when}
+        if self.reasoning:
+            d["reasoning"] = self.reasoning
+        if self.tools:
+            d["tools"] = self.tools
+        if self.output:
+            d["output"] = self.output
+        return d
 
 
 class AgentModel(Base):

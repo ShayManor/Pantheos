@@ -1,11 +1,13 @@
+import json
 import re
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request, stream_with_context
 from sqlalchemy import func
 
 from . import db, get_or_404
 from .. import scoring
-from ..models import Area, Project, Ticket
+from ..models import AgentRun, Area, Project, Ticket
+from ..ticket_run import run_ticket
 
 bp = Blueprint("tickets", __name__, url_prefix="/api")
 
@@ -88,6 +90,68 @@ def launch_ticket(tid):
     else:
         toast = f"Delphi dispatched on {tid} · Claude Code session spawning"
     return jsonify({"ticket": t.to_dict(), "toast": toast})
+
+
+@bp.get("/tickets/<tid>/run/stream")
+def ticket_run_stream(tid):
+    t = get_or_404(Ticket, tid)
+    # Capture primitives before streaming: stream_with_context resumes the
+    # generator after the request context is torn down and re-pushed, by which
+    # point lazy ORM access on `t` would raise DetachedInstanceError.
+    title, area = t.title, t.area.name
+    project = db().get(Project, t.project_key) if t.project_key else None
+    autonomy = project.autonomy if project else None
+
+    run = (db().query(AgentRun)
+           .filter(AgentRun.ticket == tid, AgentRun.kind == "execute",
+                   AgentRun.status == "running")
+           .order_by(AgentRun.position.desc()).first())
+    if run is None:
+        pos = (db().query(func.max(AgentRun.position)).scalar() or 0) + 1
+        run = AgentRun(ticket=tid, kind="execute", status="running",
+                       cost="—", when="Just now", position=pos)
+        db().add(run)
+        db().commit()
+    run_id = run.id
+
+    def generate():
+        final = None
+        try:
+            for ev in run_ticket(tid, title, area, autonomy):
+                if ev["type"] == "done":
+                    final = ev
+                yield f"event: {ev['type']}\ndata: {json.dumps(ev)}\n\n"
+        except Exception as exc:  # surface run failures to the UI
+            err = {"type": "error", "message": str(exc)}
+            yield f"event: error\ndata: {json.dumps(err)}\n\n"
+            r = db().get(AgentRun, run_id)
+            r.status = "error"
+            tk = db().get(Ticket, tid)
+            tk.agent = "idle"
+            db().commit()
+        if final is not None:
+            r = db().get(AgentRun, run_id)
+            r.reasoning = final["reasoning"]
+            r.tools = final["tools"]
+            r.output = final["text"]
+            r.cost = final["cost"]
+            r.status = "done"
+            tk = db().get(Ticket, tid)
+            tk.agent = "needs_review"
+            tk.report = final["report"]
+            tk.result = final["result"]
+            db().commit()
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+
+@bp.get("/tickets/<tid>/runs")
+def ticket_runs(tid):
+    get_or_404(Ticket, tid)
+    rows = (db().query(AgentRun)
+            .filter(AgentRun.ticket == tid)
+            .order_by(AgentRun.position.desc()).all())
+    return jsonify([r.to_dict() for r in rows])
 
 
 @bp.delete("/tickets/<tid>")

@@ -48,3 +48,21 @@ def test_frontend_static_serving(tmp_path):
     assert r.status_code == 404 and r.is_json
     app.db_session.remove()
     app.db_engine.dispose()
+
+
+def test_agent_run_transcript_roundtrip(session):
+    from app.models import AgentRun
+    r = AgentRun(ticket="GRD-0182", kind="execute", status="done",
+                 cost="$0.04", when="Just now", position=99,
+                 reasoning="thought", tools=["claude", "github"], output="# out")
+    session.add(r)
+    session.commit()
+    d = r.to_dict()
+    assert d["reasoning"] == "thought"
+    assert d["tools"] == ["claude", "github"]
+    assert d["output"] == "# out"
+    # A bare run (no transcript) omits the optional keys, like DelphiMessage.
+    bare = AgentRun(ticket="X", kind="execute", status="running",
+                    cost="—", when="Just now", position=100)
+    assert "reasoning" not in bare.to_dict()
+    assert "output" not in bare.to_dict()

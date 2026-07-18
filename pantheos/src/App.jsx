@@ -7,6 +7,7 @@ import { pathForNode, nodeFromPath, stackFromPath } from "./lib/routes.js";
 import { api } from "./api.js";
 import QueueView from "./views/QueueView.jsx";
 import TicketDetail from "./views/TicketDetail.jsx";
+import TicketRunView from "./views/TicketRunView.jsx";
 import ProjectsView, { ProjectDetail } from "./views/ProjectsView.jsx";
 import MonitorView, { MonProjectDetail, HostDetail } from "./views/MonitorView.jsx";
 import ContainerDetail from "./views/ContainerDetail.jsx";
@@ -23,6 +24,7 @@ export default function Pantheos() {
   const [hosts, setHosts] = useState({});
   const [containers, setContainers] = useState([]);
   const [areas, setAreas] = useState([]);
+  const [runsByTicket, setRunsByTicket] = useState({});
 
   const [stack, setStack] = useState(() => stackFromPath(window.location.pathname));
   const stackRef = useRef(stack);
@@ -100,10 +102,20 @@ export default function Pantheos() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  const patchRun = (id, patch) =>
+    setRunsByTicket((r) => ({ ...r, [id]: { ...r[id], ...(typeof patch === "function" ? patch(r[id] || {}) : patch) } }));
   const launchTicket = (id) => {
     api.launch(id).then(({ ticket, toast: msg }) => {
       setTickets((ts) => ts.map((t) => (t.id === id ? ticket : t)));
       toast(msg);
+      patchRun(id, { status: "running", reasoning: "", output: "", tools: [] });
+      api.ticketRunStream(id, {
+        onReasoning: (d) => patchRun(id, (cur) => ({ reasoning: (cur.reasoning || "") + d })),
+        onText: (d) => patchRun(id, (cur) => ({ output: (cur.output || "") + d })),
+        onTool: (p) => patchRun(id, (cur) => ({ tools: [...new Set([...(cur.tools || []), p.name])] })),
+        onDone: (p) => patchRun(id, { status: "done", reasoning: p.reasoning, output: p.text, tools: p.tools }),
+        onError: () => toast("Delphi run failed"),
+      });
     });
   };
   const setLifecycle = (id, life) => {
@@ -132,12 +144,15 @@ export default function Pantheos() {
   }, [searchOpen]);
 
   const apiCtx = { go, back, root, toast, tickets, launchTicket, setLifecycle, createTicket, deleteTicket, openNewTicket,
-    openContext, filter, setFilter, projects, hosts, containers, areas };
+    openContext, filter, setFilter, projects, hosts, containers, areas, runsByTicket };
 
   const section = cur.ticketId ? "queue" : cur.view;
   const secName = { queue: "Queue", projects: "Projects", monitor: "Monitor", flight: "Delphi" }[section] || "Queue";
   const crumbs = [{ label: secName, node: { view: section }, mode: section === "monitor" }];
-  if (cur.ticketId) crumbs.push({ label: tickets.find((t) => t.id === cur.ticketId)?.id || cur.ticketId });
+  if (cur.ticketId) {
+    crumbs.push({ label: tickets.find((t) => t.id === cur.ticketId)?.id || cur.ticketId });
+    if (cur.run) crumbs.push({ label: "Delphi run" });
+  }
   else if (cur.projectId) crumbs.push({ label: projects[cur.projectId]?.name });
   else if (cur.hostId) crumbs.push({ label: hosts[cur.hostId]?.name });
   else if (cur.containerId) { crumbs.push({ label: containers.find((c) => c.id === cur.containerId)?.id }); if (cur.logs) crumbs.push({ label: "Logs" }); }
@@ -146,6 +161,7 @@ export default function Pantheos() {
   if (!ready) body = <div className="gs-empty">Loading Pantheos…</div>;
   else if (cur.containerId && cur.logs) body = <ContainerLogs id={cur.containerId} />;
   else if (cur.containerId) body = <ContainerDetail id={cur.containerId} />;
+  else if (cur.ticketId && cur.run) body = <TicketRunView id={cur.ticketId} />;
   else if (cur.ticketId) body = <TicketDetail id={cur.ticketId} />;
   else if (cur.view === "projects" && cur.projectId) body = <ProjectDetail pk={cur.projectId} />;
   else if (cur.view === "monitor" && cur.projectId) body = <MonProjectDetail pk={cur.projectId} />;

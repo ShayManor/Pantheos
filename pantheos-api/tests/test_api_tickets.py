@@ -112,3 +112,84 @@ def test_delete_ticket_keeps_dependents(client):
     assert client.delete("/api/tickets/MER-0088").status_code == 204
     mer = client.get("/api/tickets/MER-0093").get_json()
     assert mer["deps"][0]["id"] == "MER-0088"
+
+
+def test_ticket_run_stream_persists_and_completes(client, app):
+    body = client.get("/api/tickets/GRD-0182/run/stream").get_data(as_text=True)
+    assert "event: reasoning" in body
+    assert "event: tool" in body
+    assert "event: done" in body
+    # side effects persisted
+    from app.models import AgentRun, Ticket
+    with app.app_context():
+        s = app.db_session
+        t = s.get(Ticket, "GRD-0182")
+        assert t.agent == "needs_review"
+        assert t.report and t.result
+        run = (s.query(AgentRun)
+               .filter(AgentRun.ticket == "GRD-0182", AgentRun.status == "done")
+               .order_by(AgentRun.position.desc()).first())
+        assert run is not None
+        assert run.output and run.reasoning and run.tools
+
+
+def test_ticket_run_stream_reuses_existing_running_run(client, app):
+    from app.models import AgentRun
+
+    with app.app_context():
+        s = app.db_session
+        existing = AgentRun(ticket="GRD-0182", kind="execute", status="running",
+                             cost="—", when="Just now", position=999)
+        s.add(existing)
+        s.commit()
+        existing_id = existing.id
+
+    client.get("/api/tickets/GRD-0182/run/stream").get_data(as_text=True)
+
+    with app.app_context():
+        s = app.db_session
+        execute_runs = (s.query(AgentRun)
+                         .filter(AgentRun.ticket == "GRD-0182", AgentRun.kind == "execute")
+                         .all())
+        assert len(execute_runs) == 1
+        reused = execute_runs[0]
+        assert reused.id == existing_id
+        assert reused.status == "done"
+        assert reused.output is not None
+
+
+def test_ticket_runs_endpoint_newest_first(client):
+    client.get("/api/tickets/GRD-0182/run/stream").get_data(as_text=True)
+    runs = client.get("/api/tickets/GRD-0182/runs").get_json()
+    assert isinstance(runs, list) and len(runs) >= 1
+    assert runs[0]["status"] == "done"
+    assert "output" in runs[0]
+
+
+def test_ticket_run_stream_unknown_ticket_404(client):
+    assert client.get("/api/tickets/NOPE/run/stream").status_code == 404
+    assert client.get("/api/tickets/NOPE/runs").status_code == 404
+
+
+def test_ticket_run_stream_surfaces_errors(client, app, monkeypatch):
+    from app.api import tickets as tickets_api
+
+    def boom(*a, **k):
+        raise RuntimeError("kaboom")
+        yield  # pragma: no cover  (make it a generator)
+
+    monkeypatch.setattr(tickets_api, "run_ticket", boom)
+    body = client.get("/api/tickets/GRD-0182/run/stream").get_data(as_text=True)
+    assert "event: error" in body
+    assert "kaboom" in body
+
+    from app.models import AgentRun, Ticket
+    with app.app_context():
+        s = app.db_session
+        t = s.get(Ticket, "GRD-0182")
+        assert t.agent == "idle"
+        run = (s.query(AgentRun)
+               .filter(AgentRun.ticket == "GRD-0182", AgentRun.kind == "execute")
+               .order_by(AgentRun.position.desc()).first())
+        assert run is not None
+        assert run.status == "error"

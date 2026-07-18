@@ -1,16 +1,25 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  AlertTriangle, CheckCircle2, ChevronRight, Clock, GitBranch, Layers,
+  AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Clock, GitBranch, Layers,
   Link2, PauseCircle, Rocket, Terminal, Trash2, Zap,
 } from "lucide-react";
 import { useNav } from "../nav.jsx";
 import { LifePill } from "../components/pills.jsx";
 import ConfirmModal from "../components/ConfirmModal.jsx";
+import DelphiActivity from "../components/DelphiActivity.jsx";
+import { api } from "../api.js";
 import { autoLabel, linkHref, LINK_ICON, LINK_KIND, openExternal } from "../lib/helpers.js";
 
 export default function TicketDetail({ id }) {
-  const { go, tickets, launchTicket, setLifecycle, deleteTicket, setFilter, toast, projects } = useNav();
+  const { go, tickets, launchTicket, setLifecycle, deleteTicket, setFilter, toast, projects, runsByTicket } = useNav();
   const [confirmDel, setConfirmDel] = useState(false);
+  const [persistedRun, setPersistedRun] = useState(null);
+  const liveRun = runsByTicket[id];
+  useEffect(() => {
+    setPersistedRun(null);
+    if (!liveRun) api.ticketRuns(id).then((rs) => setPersistedRun(rs[0] || null));
+  }, [id, liveRun]);
+  const run = liveRun || persistedRun;
   const t = tickets.find((x) => x.id === id);
   if (!t) return <div className="gs-empty">Ticket not found.</div>;
   const p = t.proj ? projects[t.proj] : null;
@@ -43,6 +52,15 @@ export default function TicketDetail({ id }) {
           <div className="gs-section-h"><Layers size={12} />PROBLEM STATEMENT · agent-written</div>
           <div className="gs-body-text">{t.body}</div>
         </div>
+        {run && (
+          <div className="gs-section">
+            <DelphiActivity run={run} />
+            <div className="gs-linkable" style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 8, fontSize: 12 }}
+              onClick={() => go({ view: "queue", ticketId: t.id, run: true })}>
+              View full run <ArrowRight size={13} />
+            </div>
+          </div>
+        )}
         {t.deps.length > 0 && (
           <div className="gs-section">
             <div className="gs-section-h"><GitBranch size={12} />DEPENDENCIES · non-blocking</div>

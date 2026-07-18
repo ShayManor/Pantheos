@@ -191,6 +191,8 @@ def add(session, name, url, token=None):
     """Register a connector in Hermes, then mirror it back. Returns the row."""
     key = _slug(name)
     if token:
+        if re.search(r"[\r\n\x00]", token):
+            raise HermesError("invalid token")
         env = _run(f"cat {_ENV} 2>/dev/null || true")
         _write(_ENV, _upsert_env(env, f"MCP_{key.upper()}_API_KEY", token))
     _write(_CONFIG, _add_to_config(_read(_CONFIG), key, url, header_auth=bool(token)))

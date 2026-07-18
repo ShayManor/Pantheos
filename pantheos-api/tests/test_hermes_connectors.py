@@ -200,6 +200,14 @@ def test_add_with_token(session, bridge):
     assert bridge.restarts == [True]
 
 
+def test_add_rejects_token_with_control_chars(session, bridge):
+    # A newline in the token could inject an extra row into Hermes' .env file.
+    bridge.monkeypatch.setattr(hc, "_read", lambda *a: pytest.fail("should not read"))
+    with pytest.raises(hc.HermesError, match="invalid token"):
+        hc.add(session, "Evil", "http://x", token="secret\nMCP_ADMIN_API_KEY=pwned")
+    assert bridge.writes == []
+
+
 def test_add_without_token_no_env_write(session, bridge):
     cfg = "mcp_servers:\n  plain:\n    url: http://x\n    enabled: true\n"
     bridge.monkeypatch.setattr(hc, "_read", lambda *a: cfg)

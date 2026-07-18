@@ -10,6 +10,36 @@ async function req(method, url, body) {
   return ct.includes("application/json") ? res.json() : res.text();
 }
 
+// Parse an SSE-style body (frames separated by \n\n; `event:`/`data:` lines)
+// and dispatch to handler callbacks. Shared by chatStream and ticketRunStream.
+async function streamSSE(res, h) {
+  if (!res.ok || !res.body) { h.onError?.({ message: `HTTP ${res.status}` }); return; }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let sep;
+    while ((sep = buf.indexOf("\n\n")) !== -1) {
+      const frame = buf.slice(0, sep); buf = buf.slice(sep + 2);
+      let ev = null, data = null;
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event:")) ev = line.slice(6).trim();
+        else if (line.startsWith("data:")) data = line.slice(5).trim();
+      }
+      if (!data) continue;
+      const p = JSON.parse(data);
+      if (ev === "reasoning") h.onReasoning?.(p.delta);
+      else if (ev === "text") h.onText?.(p.delta);
+      else if (ev === "tool") h.onTool?.(p);
+      else if (ev === "done") h.onDone?.(p);
+      else if (ev === "error") h.onError?.(p);
+    }
+  }
+}
+
 export const api = {
   tickets: () => req("GET", "/api/tickets"),
   createTicket: (data) => req("POST", "/api/tickets", data),
@@ -23,6 +53,8 @@ export const api = {
   errseries: () => req("GET", "/api/monitor/errseries"),
 
   launch: (id) => req("POST", `/api/tickets/${id}/launch`),
+  ticketRunStream: async (id, h) => { await streamSSE(await fetch(`/api/tickets/${id}/run/stream`), h); },
+  ticketRuns: (id) => req("GET", `/api/tickets/${id}/runs`),
   setLife: (id, life) => req("PATCH", `/api/tickets/${id}`, { life }),
   deleteTicket: (id) => req("DELETE", `/api/tickets/${id}`),
 
@@ -42,31 +74,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId, text, model }),
     });
-    if (!res.ok || !res.body) { h.onError?.({ message: `HTTP ${res.status}` }); return; }
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = "";
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let sep;
-      while ((sep = buf.indexOf("\n\n")) !== -1) {
-        const frame = buf.slice(0, sep); buf = buf.slice(sep + 2);
-        let ev = null, data = null;
-        for (const line of frame.split("\n")) {
-          if (line.startsWith("event:")) ev = line.slice(6).trim();
-          else if (line.startsWith("data:")) data = line.slice(5).trim();
-        }
-        if (!data) continue;
-        const p = JSON.parse(data);
-        if (ev === "reasoning") h.onReasoning?.(p.delta);
-        else if (ev === "text") h.onText?.(p.delta);
-        else if (ev === "tool") h.onTool?.(p);
-        else if (ev === "done") h.onDone?.(p);
-        else if (ev === "error") h.onError?.(p);
-      }
-    }
+    await streamSSE(res, h);
   },
   draftTicket: (ctx) => req("POST", "/api/delphi/draft_ticket", ctx),
   addConnector: (name, url, token) => req("POST", "/api/delphi/connectors", { name, url, token }),

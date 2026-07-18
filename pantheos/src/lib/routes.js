@@ -4,7 +4,7 @@
 
 export function pathForNode(node) {
   if (!node) return "/queue";
-  if (node.ticketId) return `/tickets/${node.ticketId}`;
+  if (node.ticketId) return `/tickets/${node.ticketId}${node.run ? "/delphi" : ""}`;
   if (node.containerId) return `/monitor/containers/${node.containerId}${node.logs ? "/logs" : ""}`;
   const v = node.view || "queue";
   if (v === "monitor") {
@@ -19,7 +19,9 @@ export function pathForNode(node) {
 
 export function nodeFromPath(pathname) {
   const [a, b, c, d] = pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
-  if (a === "tickets" && b) return { view: "queue", ticketId: b };
+  if (a === "tickets" && b) return c === "delphi"
+    ? { view: "queue", ticketId: b, run: true }
+    : { view: "queue", ticketId: b };
   if (a === "projects") return b ? { view: "projects", projectId: b } : { view: "projects" };
   if (a === "monitor") {
     if (b === "projects" && c) return { view: "monitor", projectId: c };
@@ -38,6 +40,7 @@ export function nodeFromPath(pathname) {
 // instead of leaving the app.
 export function stackFromPath(pathname) {
   const leaf = nodeFromPath(pathname);
+  if (leaf.ticketId && leaf.run) return [{ view: "queue" }, { view: "queue", ticketId: leaf.ticketId }, leaf];
   if (leaf.ticketId) return [{ view: "queue" }, leaf];
   if (leaf.containerId && leaf.logs) return [{ view: "monitor" }, { view: "monitor", containerId: leaf.containerId }, leaf];
   if (leaf.containerId) return [{ view: "monitor" }, leaf];
