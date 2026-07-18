@@ -1,4 +1,4 @@
-import { test, expect } from "./utils.js";
+import { test, expect, navTo } from "./utils.js";
 
 test("queue lists all tickets, score-ranked", async ({ page }) => {
   await expect(page.locator(".gs-trow")).toHaveCount(9);
@@ -6,6 +6,16 @@ test("queue lists all tickets, score-ranked", async ({ page }) => {
   await expect(page.getByText("500-rate breach on api container")).toBeVisible();
   // top of the list is a P0 (GHS-0311 now / GRD-0182)
   await expect(page.locator(".gs-trow").first().locator(".pri")).toHaveText("P0");
+});
+
+test("archived tickets leave the queue and live under the Archived horizon", async ({ page }) => {
+  await page.locator(".gs-trow", { hasText: "STA-0044" }).click();
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.locator(".gs-toast")).toContainText("archived");
+  await navTo(page, "Queue");
+  await expect(page.locator(".gs-trow", { hasText: "STA-0044" })).toHaveCount(0);
+  await page.locator(".gs-filter", { hasText: "Archived" }).click();
+  await expect(page.locator(".gs-trow", { hasText: "STA-0044" })).toBeVisible();
 });
 
 test("Someday horizon shows only backburner tickets", async ({ page }) => {

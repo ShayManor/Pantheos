@@ -34,6 +34,13 @@ scrape_configs:
     static_configs:
       - targets: ["127.0.0.1:8429"]
 
+  # gh-stats fetcher app metrics — GitHub fetch outcomes by result
+  # (ghstats_fetch_total{outcome="ok|not_found|rate_limited|error"}). Surfaces
+  # rate limits that would otherwise silently zero out commit/PR counts.
+  - job_name: ghstats_fetcher
+    static_configs:
+      - targets: ["127.0.0.1:5001"]
+
   # Blackbox uptime probes of the public URLs (probe_success{instance=...}).
   - job_name: blackbox
     metrics_path: /probe

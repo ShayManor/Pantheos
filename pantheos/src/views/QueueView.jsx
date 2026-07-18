@@ -8,9 +8,11 @@ export default function QueueView() {
   const [hz, setHz] = useState("Queue");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("score");
-  const horizons = ["Queue", "Now", "This week", "This month", "Someday"];
+  const horizons = ["Queue", "Now", "This week", "This month", "Someday", "Archived"];
 
   let list = tickets.filter((t) => {
+    if (hz === "Archived") return t.life === "archived";
+    if (t.life === "archived") return false;
     if (hz === "Now") return t.life === "active" || t.pri === 0;
     if (hz === "This week") return t.due && !t.due.includes("12d") && t.life !== "backburner";
     if (hz === "This month") return t.due;

@@ -36,6 +36,25 @@ groups:
           summary: "researchviewer.org is down"
           description: "Blackbox probe of https://researchviewer.org has failed for 2m."
 
+  - name: ghstats
+    interval: 30s
+    rules:
+      - alert: GhStatsFetchRateLimited
+        expr: increase(ghstats_fetch_total{outcome="rate_limited"}[15m]) > 3
+        for: 5m
+        labels: { severity: warning, project: ghstats, host: minipc }
+        annotations:
+          summary: "gh-stats fetcher is being rate-limited by GitHub"
+          description: "More than 3 GitHub fetches hit a rate limit in 15m. Commit/PR counts are going stale (the fetcher now keeps the last-good value instead of writing 0). Usual cause: a traffic spike or a flood of bad usernames into the fetcher."
+
+      - alert: GhStatsFetchErrors
+        expr: increase(ghstats_fetch_total{outcome="error"}[15m]) > 5
+        for: 5m
+        labels: { severity: warning, project: ghstats, host: minipc }
+        annotations:
+          summary: "gh-stats fetcher hitting GitHub errors"
+          description: "More than 5 GitHub fetches failed (non-rate-limit) in 15m. Check the fetcher logs and the GitHub PAT."
+
   - name: pantheos-infra
     interval: 30s
     rules:
