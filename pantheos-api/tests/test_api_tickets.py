@@ -90,3 +90,25 @@ def test_update_noop(client):
 
 def test_update_404(client):
     assert client.patch("/api/tickets/NOPE", json={"life": "queued"}).status_code == 404
+
+
+def test_delete_ticket(client):
+    r = client.delete("/api/tickets/GRD-0182")
+    assert r.status_code == 204
+    assert r.get_data() == b""
+    assert client.get("/api/tickets/GRD-0182").status_code == 404
+    assert len(client.get("/api/tickets").get_json()) == 8
+
+
+def test_delete_ticket_404(client):
+    assert client.delete("/api/tickets/NOPE").status_code == 404
+    client.delete("/api/tickets/GRD-0182")
+    assert client.delete("/api/tickets/GRD-0182").status_code == 404  # gone → 404
+
+
+def test_delete_ticket_keeps_dependents(client):
+    # MER-0093 depends on MER-0088; deleting the referenced ticket leaves the
+    # dangling dep on the dependent intact (dep_id may reference a missing ticket).
+    assert client.delete("/api/tickets/MER-0088").status_code == 204
+    mer = client.get("/api/tickets/MER-0093").get_json()
+    assert mer["deps"][0]["id"] == "MER-0088"

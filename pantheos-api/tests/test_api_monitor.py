@@ -146,6 +146,13 @@ def test_container_metrics_from_victoria(client, monkeypatch):
     assert len(d["series"]) == 20 and d["series"][0] == {"d": 0, "v": 3.0}
 
 
+def test_container_metrics_empty_for_noninventory_under_vm(client, monkeypatch):
+    # Real monitoring up, but this container isn't in the inventory: no series.
+    _use_vm(monkeypatch, range_vals=[3.0] * 20)
+    d = client.get("/api/containers/ghstats-generator/metrics").get_json()
+    assert d["series"] == [] and d["monitored"] is False
+
+
 def test_container_metrics_falls_back_when_query_fails(client, monkeypatch):
     _use_vm(monkeypatch, range_vals=None)  # VM up but query returns nothing
     d = client.get("/api/containers/pantheos-app-1/metrics").get_json()
@@ -195,6 +202,13 @@ def test_pantheos_logs_from_caddy(client, tmp_path, monkeypatch):
 def test_pantheos_logs_fall_back_to_mock(client, monkeypatch):
     monkeypatch.delenv("CADDY_ACCESS_LOG", raising=False)
     assert len(client.get("/api/containers/pantheos-app-1/logs").get_json()["lines"]) > 0
+
+
+def test_logs_empty_for_noninventory_under_caddy(client, tmp_path, monkeypatch):
+    # Real logging up, but this container isn't in the inventory: no log lines.
+    _caddy_log(tmp_path, monkeypatch)
+    d = client.get("/api/containers/ghstats-generator/logs").get_json()
+    assert d["lines"] == [] and d["monitored"] is False
 
 
 def _rv_caddy_log(tmp_path, monkeypatch):

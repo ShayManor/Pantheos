@@ -1,13 +1,16 @@
+import { useState } from "react";
 import {
   AlertTriangle, CheckCircle2, ChevronRight, Clock, GitBranch, Layers,
-  Link2, PauseCircle, Rocket, Terminal, Zap,
+  Link2, PauseCircle, Rocket, Terminal, Trash2, Zap,
 } from "lucide-react";
 import { useNav } from "../nav.jsx";
 import { LifePill } from "../components/pills.jsx";
+import ConfirmModal from "../components/ConfirmModal.jsx";
 import { autoLabel, linkHref, LINK_ICON, LINK_KIND, openExternal } from "../lib/helpers.js";
 
 export default function TicketDetail({ id }) {
-  const { go, tickets, launchTicket, setLifecycle, setFilter, toast, projects } = useNav();
+  const { go, tickets, launchTicket, setLifecycle, deleteTicket, setFilter, toast, projects } = useNav();
+  const [confirmDel, setConfirmDel] = useState(false);
   const t = tickets.find((x) => x.id === id);
   if (!t) return <div className="gs-empty">Ticket not found.</div>;
   const p = t.proj ? projects[t.proj] : null;
@@ -87,6 +90,8 @@ export default function TicketDetail({ id }) {
             <span className="gs-meta-v gs-linkable" onClick={() => go({ view: "projects", projectId: t.proj })}>{p.name} ›</span></div>}
           {p && <div className="gs-meta-row"><span className="gs-meta-k">autonomy</span>
             <span className="pill neu" style={{ textTransform: "none" }}>{autoLabel(p.autonomy)}</span></div>}
+          <button className="gs-btn danger" style={{ width: "100%", justifyContent: "center", marginTop: 12 }}
+            onClick={() => setConfirmDel(true)}><Trash2 size={14} />Delete ticket</button>
         </div>
 
         {p && p.autonomy === "propose" && (
@@ -121,6 +126,15 @@ export default function TicketDetail({ id }) {
           </div>
         )}
       </div>
+
+      {confirmDel && (
+        <ConfirmModal
+          title={`Delete ${t.id}?`}
+          body="This permanently deletes the ticket and can't be undone."
+          confirmLabel="Delete ticket"
+          onConfirm={() => { setConfirmDel(false); deleteTicket(t.id); }}
+          onClose={() => setConfirmDel(false)} />
+      )}
     </div>
   );
 }

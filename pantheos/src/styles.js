@@ -122,6 +122,8 @@ export const CSS = `
 .gs-btn.primary:hover{background:#0c6a41;}
 .gs-btn.ghost{background:var(--surface);border:1px solid var(--line-2);color:var(--ink);}
 .gs-btn.ghost:hover{border-color:var(--ink-3);background:var(--surface-2);}
+.gs-btn.danger{background:var(--surface);border:1px solid var(--fault-line);color:var(--fault);}
+.gs-btn.danger:hover{background:var(--fault-soft);border-color:var(--fault);}
 .gs-btn:focus-visible{outline:2px solid var(--go);outline-offset:2px;}
 
 /* project cards */

@@ -60,6 +60,10 @@ def container_metrics(cid):
         if vals is not None:
             series = [{"d": i, "v": round(v, 1)} for i, v in enumerate(vals)]
             return jsonify({"series": series, "off": c.up == "LOS"})
+    elif victoria.available():
+        # Real monitoring is up but this container isn't in the inventory: show
+        # nothing rather than a fabricated series.
+        return jsonify({"series": [], "off": c.up == "LOS", "monitored": False})
     return jsonify(metrics.container_metrics(c))
 
 
@@ -69,6 +73,10 @@ def container_logs(cid):
     inv = entry(cid)
     if inv and caddy_logs.available():
         return jsonify({"lines": caddy_logs.logs(inv["hosts"])})
+    if caddy_logs.available():
+        # Real logging is up but this container isn't in the inventory: no
+        # fabricated log lines.
+        return jsonify({"lines": [], "monitored": False})
     return jsonify({"lines": metrics.container_logs(c)})
 
 

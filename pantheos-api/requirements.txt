@@ -3,6 +3,7 @@ SQLAlchemy>=2.0.36
 psycopg[binary]>=3.2.10
 gunicorn>=23.0.0
 python-dotenv>=1.0.1
+PyYAML>=6.0
 pytest>=8.3.4
 pytest-cov>=6.0.0
 agent-client-protocol>=0.4

@@ -92,3 +92,67 @@ def run_turn(text, hermes_session_id, model=None, history=None):
 
     yield {"type": "done", "text": full_text, "reasoning": full_reasoning,
            "tools": [], "model": model, "hermes_session_id": hermes_session_id}
+
+
+_DRAFT_FIELDS = ("title", "summary", "pri", "effort_hours", "deadline_hours")
+
+
+def draft(context, projects=None, areas=None, model=None):
+    """One-shot structured ticket draft from an OpenAI-compatible model.
+
+    Returns a dict with title/summary/pri/effort_hours/deadline_hours and, when
+    the model picks one, a project_key or area_id (validated against the given
+    ``projects``/``areas`` id maps). ``context`` is whatever the user has filled
+    in so far. Raises RuntimeError if no key/endpoint is configured.
+    """
+    key = _api_key()
+    if not key:
+        raise RuntimeError("no OpenAI API key set (DELPHI_OPENAI_API_KEY / OPENAI_API_KEY)")
+    base = os.environ.get("DELPHI_OPENAI_BASE_URL", _DEFAULT_BASE).rstrip("/")
+    model = model or os.environ.get("DELPHI_MODEL", _DEFAULT_MODEL)
+    timeout = float(os.environ.get("DELPHI_OPENAI_TIMEOUT", "120"))
+    projects, areas = projects or {}, areas or {}
+
+    proj_lines = "\n".join(f"  {k}: {name}" for k, name in projects.items())
+    area_lines = "\n".join(f"  {k}: {name}" for k, name in areas.items())
+    instruction = (
+        "Draft a Pantheos ticket from what the user has filled in. Reply with a "
+        "single JSON object and nothing else, with keys: title (string), summary "
+        "(one line), pri (0 highest, 1, or 2), effort_hours (integer), "
+        "deadline_hours (integer; 72 = this week, 168 = next week), and EITHER "
+        "project_key or area_id when one clearly fits.\n\n"
+        f"Valid project_key values:\n{proj_lines or '  (none)'}\n\n"
+        f"Valid area_id values:\n{area_lines or '  (none)'}\n\n"
+        f"What the user has so far:\n{json.dumps(context)}"
+    )
+    payload = {
+        "model": model,
+        "stream": False,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": _system_prompt()},
+            {"role": "user", "content": instruction},
+        ],
+    }
+    req = urllib.request.Request(
+        f"{base}/chat/completions",
+        data=json.dumps(payload).encode(),
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:500]
+        raise RuntimeError(f"draft request failed (HTTP {exc.code}): {detail}") from exc
+    content = (body.get("choices") or [{}])[0].get("message", {}).get("content") or "{}"
+    raw = json.loads(content)
+
+    out = {f: raw[f] for f in _DRAFT_FIELDS if f in raw}
+    out.setdefault("title", (context or {}).get("title") or "New ticket")
+    if raw.get("project_key") in projects:
+        out["project_key"] = raw["project_key"]
+    elif raw.get("area_id") in areas:
+        out["area_id"] = raw["area_id"]
+    return out

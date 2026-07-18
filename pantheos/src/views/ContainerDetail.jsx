@@ -11,7 +11,8 @@ export default function ContainerDetail({ id }) {
   const c = containers.find((x) => x.id === id);
   const p = projects[c.proj], h = hosts[c.host];
   const [series, setSeries] = useState([]);
-  useEffect(() => { api.containerMetrics(id).then((d) => setSeries(d.series)); }, [id]);
+  const [monitored, setMonitored] = useState(true);
+  useEffect(() => { api.containerMetrics(id).then((d) => { setSeries(d.series); setMonitored(d.monitored !== false); }); }, [id]);
   const off = c.up === "LOS";
   const relTicket = tickets.find((t) => t.proj === c.proj && t.source === "alert");
   const tiles = [
@@ -55,6 +56,12 @@ export default function ContainerDetail({ id }) {
         <div className="gs-card" style={{ padding: "14px 16px", marginBottom: 22, background: "var(--surface-2)" }}>
           <div style={{ display: "flex", gap: 10, alignItems: "center", color: "var(--ink-2)", fontSize: 13 }}>
             <SignalZero size={16} /><span>Loss of signal · intermittent host, no alert.</span>
+          </div>
+        </div>
+      ) : !monitored ? (
+        <div className="gs-card" style={{ padding: "14px 16px", marginBottom: 22, background: "var(--surface-2)" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", color: "var(--ink-2)", fontSize: 13 }}>
+            <Activity size={16} /><span>Not monitored · no telemetry collected for this container.</span>
           </div>
         </div>
       ) : (

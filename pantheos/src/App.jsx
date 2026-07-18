@@ -111,6 +111,8 @@ export default function Pantheos() {
   };
   const createTicket = (payload) =>
     api.createTicket(payload).then((ticket) => { setTickets((ts) => [...ts, ticket]); return ticket; });
+  const deleteTicket = (id) =>
+    api.deleteTicket(id).then(() => { setTickets((ts) => ts.filter((t) => t.id !== id)); back(); toast(`${id} deleted`); });
   const openNewTicket = () => setNewTicketOpen(true);
   const openContext = (kind, id, name) => setContextTarget({ kind, id, name });
 
@@ -129,7 +131,7 @@ export default function Pantheos() {
     return () => window.removeEventListener("keydown", h);
   }, [searchOpen]);
 
-  const apiCtx = { go, back, root, toast, tickets, launchTicket, setLifecycle, createTicket, openNewTicket,
+  const apiCtx = { go, back, root, toast, tickets, launchTicket, setLifecycle, createTicket, deleteTicket, openNewTicket,
     openContext, filter, setFilter, projects, hosts, containers, areas };
 
   const section = cur.ticketId ? "queue" : cur.view;

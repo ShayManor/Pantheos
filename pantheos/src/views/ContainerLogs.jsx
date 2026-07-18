@@ -12,7 +12,8 @@ export default function ContainerLogs({ id }) {
   const p = projects[c.proj], h = hosts[c.host];
   const [lvl, setLvl] = useState("all");
   const [all, setAll] = useState([]);
-  useEffect(() => { api.containerLogs(id).then((d) => setAll(d.lines)); }, [id]);
+  const [monitored, setMonitored] = useState(true);
+  useEffect(() => { api.containerLogs(id).then((d) => { setAll(d.lines); setMonitored(d.monitored !== false); }); }, [id]);
   const lines = all.filter((l) => lvl === "all" || l.lvl === lvl);
 
   const download = () => {
@@ -38,7 +39,7 @@ export default function ContainerLogs({ id }) {
         <h1 className="gs-h1" style={{ margin: 0 }}>Logs</h1>
         <StatusPill s={c.status} />
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          {c.up !== "LOS" && <span className="gs-follow"><span className="dot go" style={{ boxShadow: "none", width: 6, height: 6 }} />following</span>}
+          {monitored && c.up !== "LOS" && <span className="gs-follow"><span className="dot go" style={{ boxShadow: "none", width: 6, height: 6 }} />following</span>}
           <button className="gs-btn ghost" onClick={download}><Download size={15} />Download</button>
         </div>
       </div>
@@ -50,7 +51,9 @@ export default function ContainerLogs({ id }) {
         ))}
       </div>
       <div className="gs-logbox">
-        {lines.map((l, i) => (
+        {!monitored ? (
+          <div className="gs-logline"><span className="mg">Not monitored · no logs collected for this container.</span></div>
+        ) : lines.map((l, i) => (
           <div key={i} className="gs-logline">
             <span className="ts">{l.t}</span>
             <span className={`lv ${l.lvl}`}>{LV[l.lvl]}</span>

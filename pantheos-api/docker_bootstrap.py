@@ -8,7 +8,7 @@ import time
 
 import sqlalchemy
 
-from app import create_app
+from app import create_app, hermes_connectors
 from app.models import Area, Base
 from app.seed import seed, sync_models
 
@@ -36,4 +36,8 @@ else:
 # so an existing DB doesn't keep offering stale/unservable models.
 sync_models(session)
 print("model catalog synced", flush=True)
+# Reconcile the connectors panel to Hermes' live config (no-op unless the SSH
+# bridge is configured). Never fatal — mirror() swallows a Hermes hiccup.
+hermes_connectors.mirror(session)
+print("hermes connectors mirrored", flush=True)
 session.remove()

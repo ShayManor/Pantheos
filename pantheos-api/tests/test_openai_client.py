@@ -151,3 +151,73 @@ def test_dispatcher_selects_openai_and_passes_model(monkeypatch):
     assert out[-1]["text"] == "hi"
     assert got["model"] == "gpt-5.6-luna"
     assert got["history"] == hist
+
+
+class FakeReadResp:
+    """Stand-in for a non-streaming response: .read() + context manager."""
+    def __init__(self, body):
+        self._body = body
+
+    def read(self):
+        return json.dumps(self._body).encode()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _completion(obj):
+    return {"choices": [{"message": {"content": json.dumps(obj)}}]}
+
+
+def test_draft_returns_structured_fields(monkeypatch):
+    monkeypatch.setenv("DELPHI_OPENAI_API_KEY", "sk-test")
+    captured = {}
+
+    def fake_urlopen(req, timeout=None):
+        captured["body"] = json.loads(req.data)
+        return FakeReadResp(_completion({
+            "title": "Harden rate limiter", "summary": "add the guard", "pri": 0,
+            "effort_hours": 3, "deadline_hours": 72,
+            "project_key": "ghstats", "area_id": "bogus",
+        }))
+
+    monkeypatch.setattr("app.openai_client.urllib.request.urlopen", fake_urlopen)
+    out = oc.draft({"title": "gh-stats 5xx"},
+                   projects={"ghstats": "gh-stats"}, areas={"stat511": "STAT 511"})
+    assert out["title"] == "Harden rate limiter" and out["pri"] == 0
+    assert out["effort_hours"] == 3 and out["deadline_hours"] == 72
+    assert out["project_key"] == "ghstats"       # valid key kept
+    assert "area_id" not in out                  # project_key won; bogus area dropped
+    assert captured["body"]["stream"] is False
+    assert captured["body"]["response_format"] == {"type": "json_object"}
+
+
+def test_draft_attaches_area_and_defaults_title(monkeypatch):
+    monkeypatch.setenv("DELPHI_OPENAI_API_KEY", "sk-test")
+    monkeypatch.setattr("app.openai_client.urllib.request.urlopen",
+                        lambda req, timeout=None: FakeReadResp(
+                            _completion({"summary": "s", "area_id": "stat511"})))
+    out = oc.draft({}, areas={"stat511": "STAT 511"})
+    assert out["area_id"] == "stat511"           # area attached when no project
+    assert out["title"] == "New ticket"          # setdefault fallback
+
+
+def test_draft_requires_key(monkeypatch):
+    monkeypatch.delenv("DELPHI_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with pytest.raises(RuntimeError):
+        oc.draft({"title": "x"})
+
+
+def test_draft_raises_on_http_error(monkeypatch):
+    monkeypatch.setenv("DELPHI_OPENAI_API_KEY", "sk-test")
+
+    def boom(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 400, "bad", {}, io.BytesIO(b"model gone"))
+
+    monkeypatch.setattr("app.openai_client.urllib.request.urlopen", boom)
+    with pytest.raises(RuntimeError):
+        oc.draft({"title": "x"}, projects={"merlin": "MERLIN"})

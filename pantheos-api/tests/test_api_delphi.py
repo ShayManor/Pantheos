@@ -52,6 +52,42 @@ def test_add_connector_with_url(client):
     assert r.get_json()["url"] == "host:1"
 
 
+def test_connector_bridge_enabled(client, monkeypatch):
+    """With the Hermes bridge on, connector edits route through it, not the DB."""
+    from app import hermes_connectors as hc
+    from app.models import McpServer
+    monkeypatch.setattr(hc, "enabled", lambda: True)
+
+    added = McpServer(id="exa", name="Exa", url="u", tools="—", on=True, desc="")
+    monkeypatch.setattr(hc, "add", lambda *a, **k: added)
+    r = client.post("/api/delphi/connectors", json={"name": "Exa", "url": "u", "token": "t"})
+    assert r.status_code == 201 and r.get_json()["id"] == "exa"
+
+    toggled = McpServer(id="github", name="GitHub", url="u", tools="47", on=False, desc="")
+    monkeypatch.setattr(hc, "set_enabled", lambda *a, **k: toggled)
+    r = client.patch("/api/delphi/connectors/github", json={"on": False})
+    assert r.status_code == 200 and r.get_json()["on"] is False
+
+    monkeypatch.setattr(hc, "remove", lambda *a, **k: None)
+    assert client.delete("/api/delphi/connectors/github").status_code == 200
+
+
+def test_connector_bridge_errors(client, monkeypatch):
+    """A bridge SSH failure surfaces as 502 on add/toggle/delete."""
+    from app import hermes_connectors as hc
+    monkeypatch.setattr(hc, "enabled", lambda: True)
+
+    def boom(*a, **k):
+        raise hc.HermesError("ssh down")
+
+    monkeypatch.setattr(hc, "add", boom)
+    monkeypatch.setattr(hc, "set_enabled", boom)
+    monkeypatch.setattr(hc, "remove", boom)
+    assert client.post("/api/delphi/connectors", json={"name": "Z"}).status_code == 502
+    assert client.patch("/api/delphi/connectors/github", json={"on": False}).status_code == 502
+    assert client.delete("/api/delphi/connectors/github").status_code == 502
+
+
 def test_skill_crud(client):
     r = client.post("/api/delphi/skills", json={"name": "my-skill"})
     assert r.status_code == 201
@@ -198,3 +234,29 @@ def test_sync_models_refreshes_stale_catalog(session):
 
     ids = [m.id for m in session.query(AgentModel).order_by(AgentModel.position)]
     assert ids == ["gpt-5.6-terra", "gpt-5.6-luna", "zai/glm-5.2"]
+
+
+def test_draft_ticket_uses_model_when_configured(client, monkeypatch):
+    monkeypatch.setenv("DELPHI_ACP_MODE", "openai")
+    seen = {}
+
+    def fake_draft(data, projects, areas):
+        seen["projects"] = projects
+        seen["areas"] = areas
+        return {"title": "Modelled draft", "project_key": "merlin"}
+
+    monkeypatch.setattr("app.openai_client.draft", fake_draft)
+    d = client.post("/api/delphi/draft_ticket", json={"title": "port"}).get_json()
+    assert d["title"] == "Modelled draft" and d["project_key"] == "merlin"
+    assert "merlin" in seen["projects"] and seen["areas"]     # real DB options passed in
+
+
+def test_draft_ticket_falls_back_on_model_error(client, monkeypatch):
+    monkeypatch.setenv("DELPHI_ACP_MODE", "openai")
+
+    def boom(data, projects, areas):
+        raise RuntimeError("model down")
+
+    monkeypatch.setattr("app.openai_client.draft", boom)
+    d = client.post("/api/delphi/draft_ticket", json={"title": "port to rubik pi"}).get_json()
+    assert d["project_key"] == "merlin"     # canned draft on failure

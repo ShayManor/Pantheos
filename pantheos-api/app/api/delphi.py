@@ -7,8 +7,9 @@ from sqlalchemy import func
 from . import db, get_or_404
 from .. import acp
 from .. import delphi as delphi_logic
-from ..models import (AgentModel, AgentRun, DelphiMessage, DelphiSession,
-                      McpServer, MemoryFact, Skill)
+from .. import hermes_connectors
+from ..models import (AgentModel, AgentRun, Area, DelphiMessage, DelphiSession,
+                      McpServer, MemoryFact, Project, Skill)
 from ..seed_data import GREETING
 
 bp = Blueprint("delphi", __name__, url_prefix="/api/delphi")
@@ -132,7 +133,17 @@ def chat_stream():
 
 @bp.post("/draft_ticket")
 def draft_ticket():
+    import os
     data = request.get_json(silent=True) or {}
+    if os.environ.get("DELPHI_ACP_MODE", "mock") != "mock":
+        s = db()
+        projects = {p.key: p.name for p in s.query(Project)}
+        areas = {a.id: a.name for a in s.query(Area)}
+        try:
+            from .. import openai_client
+            return jsonify(openai_client.draft(data, projects=projects, areas=areas))
+        except Exception:
+            pass   # any model/network failure falls back to the canned draft
     return jsonify(delphi_logic.draft_ticket(data))
 
 
@@ -144,6 +155,13 @@ def add_connector():
     if not name:
         return jsonify({"error": "name required"}), 400
     url = (data.get("url") or "").strip() or "custom"
+    if hermes_connectors.enabled():
+        try:
+            srv = hermes_connectors.add(db(), name, url,
+                                        (data.get("token") or "").strip() or None)
+        except hermes_connectors.HermesError as e:
+            return jsonify({"error": str(e)}), 502
+        return jsonify(srv.to_dict()), 201
     srv = McpServer(id=_new_id(), name=name, url=url, tools="—", on=True,
                     desc="Custom connector", position=_front_position(McpServer))
     db().add(srv)
@@ -155,8 +173,16 @@ def add_connector():
 def toggle_connector(sid):
     srv = get_or_404(McpServer, sid)
     data = request.get_json(silent=True) or {}
-    if "on" in data:
-        srv.on = bool(data["on"])
+    if "on" not in data:
+        return jsonify(srv.to_dict())
+    on = bool(data["on"])
+    if hermes_connectors.enabled():
+        try:
+            srv = hermes_connectors.set_enabled(db(), sid, on)
+        except hermes_connectors.HermesError as e:
+            return jsonify({"error": str(e)}), 502
+        return jsonify(srv.to_dict())
+    srv.on = on
     db().commit()
     return jsonify(srv.to_dict())
 
@@ -164,6 +190,12 @@ def toggle_connector(sid):
 @bp.delete("/connectors/<sid>")
 def delete_connector(sid):
     srv = get_or_404(McpServer, sid)
+    if hermes_connectors.enabled():
+        try:
+            hermes_connectors.remove(db(), sid)
+        except hermes_connectors.HermesError as e:
+            return jsonify({"error": str(e)}), 502
+        return jsonify({"status": "deleted"})
     db().delete(srv)
     db().commit()
     return jsonify({"status": "deleted"})

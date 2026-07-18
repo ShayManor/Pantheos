@@ -25,6 +25,20 @@ test("propose ticket surfaces the PR-only guard", async ({ page }) => {
   await expect(page.getByText("Opens a pull request and stops for your review.")).toBeVisible();
 });
 
+test("delete a ticket removes it from the queue", async ({ page }) => {
+  await page.locator(".gs-trow", { hasText: "GRD-0182" }).click();
+  // Cancel leaves the ticket intact.
+  await page.getByRole("button", { name: "Delete ticket" }).click();
+  await page.locator(".gs-overlay").getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("heading", { name: "TMLR camera-ready revisions" })).toBeVisible();
+  // Confirm deletes it and returns to the queue.
+  await page.getByRole("button", { name: "Delete ticket" }).click();
+  await page.locator(".gs-overlay").getByRole("button", { name: "Delete ticket" }).click();
+  await expect(page.getByRole("heading", { name: "Queue" })).toBeVisible();
+  await expect(page.locator(".gs-toast")).toContainText("GRD-0182 deleted");
+  await expect(page.locator(".gs-trow", { hasText: "GRD-0182" })).toHaveCount(0);
+});
+
 test("clicking a ticket source filters the queue by it", async ({ page }) => {
   await page.locator(".gs-trow", { hasText: "GRD-0182" }).click();
   await page.locator(".gs-linkable", { hasText: "manual" }).click();

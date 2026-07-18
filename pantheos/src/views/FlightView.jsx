@@ -42,7 +42,7 @@ export default function FlightView() {
   const [modelOpen, setModelOpen] = useState(false);
   const [servers, setServers] = useState([]);
   const [skills, setSkills] = useState([]);
-  const [newSrv, setNewSrv] = useState({ name: "", url: "" });
+  const [newSrv, setNewSrv] = useState({ name: "", url: "", token: "" });
   const [newSkill, setNewSkill] = useState("");
   const fileRef = useRef(null);
   const scrollRef = useRef(null);
@@ -125,10 +125,10 @@ export default function FlightView() {
   const stopRec = () => { recRef.current?.stop(); setRecording(false); };
   const addServer = () => {
     if (!newSrv.name.trim()) return;
-    api.addConnector(newSrv.name.trim(), newSrv.url.trim()).then((srv) => {
+    api.addConnector(newSrv.name.trim(), newSrv.url.trim(), newSrv.token.trim()).then((srv) => {
       setServers((s) => [srv, ...s]); toast(`Connected ${srv.name}`);
     });
-    setNewSrv({ name: "", url: "" });
+    setNewSrv({ name: "", url: "", token: "" });
   };
   const toggleServer = (s) => {
     api.toggleConnector(s.id, !s.on).then((u) => setServers((list) => list.map((x) => (x.id === u.id ? u : x))));
@@ -348,6 +348,7 @@ export default function FlightView() {
                       <input className="gs-input" placeholder="server URL" value={newSrv.url} onChange={(e) => setNewSrv({ ...newSrv, url: e.target.value })} onKeyDown={(e) => e.key === "Enter" && addServer()} />
                       <button className="gs-btn primary" onClick={addServer}><Plus size={15} />Add</button>
                     </div>
+                    <input className="gs-input" type="password" placeholder="auth token (optional)" value={newSrv.token} onChange={(e) => setNewSrv({ ...newSrv, token: e.target.value })} onKeyDown={(e) => e.key === "Enter" && addServer()} />
                   </div>
                 </>
               )}

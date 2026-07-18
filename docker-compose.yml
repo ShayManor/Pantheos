@@ -39,6 +39,11 @@ services:
       # DELPHI_ACP_CMD default is: ssh minipc "bash -lc 'hermes acp'"
       # Hands the Pantheos MCP tools to Hermes over ACP (the mcp service below).
       PANTHEOS_MCP_URL: http://127.0.0.1:8001/mcp
+      # Makes Hermes the source of truth for the connectors panel: the app
+      # mirrors ~/.hermes/config.yaml into the DB and pushes UI edits back out,
+      # all over this ssh host alias (same channel ACP uses). Unset => panel
+      # stays pure-DB. Only the app service gets it (the mcp service must not).
+      PANTHEOS_HERMES_SSH: minipc
       # Real telemetry for the Pantheos (gs-platform) container in Monitor: the
       # Caddy access log, mounted read-only below. Absent => Monitor uses the mock.
       CADDY_ACCESS_LOG: /var/log/caddy/access.log

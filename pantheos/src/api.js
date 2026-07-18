@@ -24,6 +24,7 @@ export const api = {
 
   launch: (id) => req("POST", `/api/tickets/${id}/launch`),
   setLife: (id, life) => req("PATCH", `/api/tickets/${id}`, { life }),
+  deleteTicket: (id) => req("DELETE", `/api/tickets/${id}`),
 
   getAreaContext: (id) => req("GET", `/api/areas/${id}/context`),
   setAreaContext: (id, context) => req("PUT", `/api/areas/${id}/context`, { context }),
@@ -68,7 +69,7 @@ export const api = {
     }
   },
   draftTicket: (ctx) => req("POST", "/api/delphi/draft_ticket", ctx),
-  addConnector: (name, url) => req("POST", "/api/delphi/connectors", { name, url }),
+  addConnector: (name, url, token) => req("POST", "/api/delphi/connectors", { name, url, token }),
   toggleConnector: (id, on) => req("PATCH", `/api/delphi/connectors/${id}`, { on }),
   deleteConnector: (id) => req("DELETE", `/api/delphi/connectors/${id}`),
   addSkill: (name) => req("POST", "/api/delphi/skills", { name }),

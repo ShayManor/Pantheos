@@ -73,6 +73,10 @@ def get_ticket(tid):
 
 @bp.post("/tickets/<tid>/launch")
 def launch_ticket(tid):
+    # TODO: real agent execution is not yet implemented. This only flips the
+    # ticket to "executing" and returns a toast — nothing dispatches Delphi or
+    # runs the work. Wiring this to the agent (see mcp/tools.run_claude_code) is
+    # the remaining piece.
     t = get_or_404(Ticket, tid)
     t.agent = "executing"
     if t.life == "backburner":
@@ -84,6 +88,14 @@ def launch_ticket(tid):
     else:
         toast = f"Delphi dispatched on {tid} · Claude Code session spawning"
     return jsonify({"ticket": t.to_dict(), "toast": toast})
+
+
+@bp.delete("/tickets/<tid>")
+def delete_ticket(tid):
+    t = get_or_404(Ticket, tid)
+    db().delete(t)
+    db().commit()
+    return "", 204
 
 
 @bp.patch("/tickets/<tid>")
