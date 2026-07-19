@@ -25,3 +25,28 @@ test("launching Delphi streams a run, completes, and persists", async ({ page })
   await expect(page.getByText("DELPHI ACTIVITY", { exact: false })).toBeVisible();
   await expect(page.getByText("Run summary for GRD-0182", { exact: false })).toBeVisible();
 });
+
+test("a failed launch request surfaces an error instead of doing nothing", async ({ page }) => {
+  // Simulate the API being unreachable/erroring for the launch call.
+  await page.route("**/api/tickets/*/launch", (route) =>
+    route.fulfill({ status: 500, contentType: "text/plain", body: "boom" }));
+
+  await page.locator(".gs-trow", { hasText: "GRD-0182" }).click();
+  await page.getByRole("button", { name: "Launch Delphi" }).click();
+
+  // The user gets explicit feedback, not a silent no-op.
+  await expect(page.getByText("Couldn't launch Delphi", { exact: false })).toBeVisible();
+});
+
+test("a run whose stream fails does not stay stuck at 'running…'", async ({ page }) => {
+  // Launch succeeds, but the run stream connection fails.
+  await page.route("**/api/tickets/*/run/stream", (route) =>
+    route.fulfill({ status: 500, contentType: "text/plain", body: "boom" }));
+
+  await page.locator(".gs-trow", { hasText: "GRD-0182" }).click();
+  await page.getByRole("button", { name: "Launch Delphi" }).click();
+
+  await expect(page.getByText("Delphi run failed")).toBeVisible();
+  // The activity strip must not be frozen mid-run.
+  await expect(page.getByText("DELPHI ACTIVITY · running", { exact: false })).toHaveCount(0);
+});

@@ -105,6 +105,7 @@ export default function Pantheos() {
   const patchRun = (id, patch) =>
     setRunsByTicket((r) => ({ ...r, [id]: { ...r[id], ...(typeof patch === "function" ? patch(r[id] || {}) : patch) } }));
   const launchTicket = (id) => {
+    const failRun = () => { patchRun(id, { status: "error" }); toast("Delphi run failed"); };
     api.launch(id).then(({ ticket, toast: msg }) => {
       setTickets((ts) => ts.map((t) => (t.id === id ? ticket : t)));
       toast(msg);
@@ -114,9 +115,9 @@ export default function Pantheos() {
         onText: (d) => patchRun(id, (cur) => ({ output: (cur.output || "") + d })),
         onTool: (p) => patchRun(id, (cur) => ({ tools: [...new Set([...(cur.tools || []), p.name])] })),
         onDone: (p) => patchRun(id, { status: "done", reasoning: p.reasoning, output: p.text, tools: p.tools }),
-        onError: () => toast("Delphi run failed"),
-      });
-    });
+        onError: failRun,
+      }).catch(failRun);            // stream connection never established
+    }).catch(() => toast("Couldn't launch Delphi — is the API reachable?"));
   };
   const setLifecycle = (id, life) => {
     api.setLife(id, life).then((updated) => setTickets((ts) => ts.map((t) => (t.id === id ? updated : t))));

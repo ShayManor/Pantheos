@@ -7,10 +7,11 @@ import { TOOLMAP } from "../lib/helpers.js";
 export default function DelphiActivity({ run }) {
   if (!run) return null;
   const live = run.status === "running";
+  const label = live ? "running…" : run.status === "error" ? "failed" : "completed";
   return (
     <div className="gs-section">
       <div className="gs-section-h">
-        <Terminal size={12} />DELPHI ACTIVITY · {live ? "running…" : "completed"}
+        <Terminal size={12} />DELPHI ACTIVITY · {label}
       </div>
       {(run.reasoning || live) && <Thinking reasoning={run.reasoning} live={live && !run.output} />}
       {run.tools && run.tools.length > 0 && (
