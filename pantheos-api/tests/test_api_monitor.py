@@ -135,9 +135,55 @@ def test_container_partial_vm_keeps_seeded(client, monkeypatch):
 
 
 def test_noninventory_container_stays_mock_under_vm(client, monkeypatch):
+    # gpu-api runs on Cloud Run, invisible to the minipc's cAdvisor, so it's not
+    # in the inventory and keeps its seeded values even when VM is up.
     _use_vm(monkeypatch, _HEALTHY)
-    api = next(c for c in client.get("/api/containers").get_json() if c["id"] == "ghstats-generator")
+    api = next(c for c in client.get("/api/containers").get_json() if c["id"] == "gpu-api")
     assert api["cpuN"] == 0 and api["rps"] == "—"     # seeded (neutral), non-inventory stays as-is
+
+
+def _by_id(client, cid):
+    return next(c for c in client.get("/api/containers").get_json() if c["id"] == cid)
+
+
+def test_ghstats_generator_full_site(client, monkeypatch):
+    # The generator fronts gh-stats.com, so it gets the full site treatment.
+    _use_vm(monkeypatch, _HEALTHY)
+    gen = _by_id(client, "ghstats-generator")
+    assert gen["cpu"] == "17%" and gen["mem"] == "340M"
+    assert gen["rps"] == "12.3/s" and gen["err"] == "0.1%" and gen["p95"] == "205 ms"
+    assert gen["up"] == "AOS" and gen["status"] == "go"
+
+
+def test_cadvisor_only_real_resources(client, monkeypatch):
+    # An internal sidecar (no vhost) gets real cpu/mem/restarts, but its request
+    # fields and uptime stay seeded — no site metrics or blackbox probe exist.
+    _use_vm(monkeypatch, _HEALTHY)
+    db = _by_id(client, "pantheos-db-1")
+    assert db["cpu"] == "17%" and db["mem"] == "340M" and db["restarts"] == 0
+    assert db["rps"] == "—" and db["err"] == "—" and db["p95"] == "—"
+    assert db["status"] == "go"
+
+
+def test_cadvisor_only_status_fault_by_restarts(client, monkeypatch):
+    # A crash-looping internal container turns red on restarts alone.
+    _use_vm(monkeypatch, {**_HEALTHY, "changes(container_start_time": 5})
+    db = _by_id(client, "pantheos-db-1")
+    assert db["restarts"] == 5 and db["status"] == "flt"
+
+
+def test_cadvisor_only_metrics_series(client, monkeypatch):
+    # cAdvisor-only containers still get a real CPU chart (name-keyed, no site).
+    _use_vm(monkeypatch, range_vals=[3.0] * 20)
+    d = client.get("/api/containers/pantheos-db-1/metrics").get_json()
+    assert len(d["series"]) == 20 and d["series"][0] == {"d": 0, "v": 3.0}
+
+
+def test_cadvisor_only_logs_empty_under_caddy(client, tmp_path, monkeypatch):
+    # No public vhost → no access-log lines, and we don't fabricate any.
+    _caddy_log(tmp_path, monkeypatch)
+    d = client.get("/api/containers/pantheos-db-1/logs").get_json()
+    assert d["lines"] == [] and d["monitored"] is False
 
 
 def test_container_metrics_from_victoria(client, monkeypatch):
@@ -149,7 +195,7 @@ def test_container_metrics_from_victoria(client, monkeypatch):
 def test_container_metrics_empty_for_noninventory_under_vm(client, monkeypatch):
     # Real monitoring up, but this container isn't in the inventory: no series.
     _use_vm(monkeypatch, range_vals=[3.0] * 20)
-    d = client.get("/api/containers/ghstats-generator/metrics").get_json()
+    d = client.get("/api/containers/gpu-api/metrics").get_json()
     assert d["series"] == [] and d["monitored"] is False
 
 
@@ -207,7 +253,7 @@ def test_pantheos_logs_fall_back_to_mock(client, monkeypatch):
 def test_logs_empty_for_noninventory_under_caddy(client, tmp_path, monkeypatch):
     # Real logging up, but this container isn't in the inventory: no log lines.
     _caddy_log(tmp_path, monkeypatch)
-    d = client.get("/api/containers/ghstats-generator/logs").get_json()
+    d = client.get("/api/containers/gpu-api/logs").get_json()
     assert d["lines"] == [] and d["monitored"] is False
 
 

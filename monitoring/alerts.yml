@@ -36,6 +36,22 @@ groups:
           summary: "researchviewer.org is down"
           description: "Blackbox probe of https://researchviewer.org has failed for 2m."
 
+      - alert: HighErrorRate
+        expr: pantheos_caddy_err_ratio{site="gh-stats.com"} > 0.05
+        for: 2m
+        labels: { severity: critical, project: ghstats, host: minipc, route: gh-stats.com }
+        annotations:
+          summary: "gh-stats.com 5xx rate above 5%"
+          description: "The 5xx error ratio for gh-stats.com has exceeded 5% for 2m."
+
+      - alert: SiteDown
+        expr: probe_success{instance="https://gh-stats.com"} == 0
+        for: 2m
+        labels: { severity: critical, project: ghstats, host: minipc, route: gh-stats.com }
+        annotations:
+          summary: "gh-stats.com is down"
+          description: "Blackbox probe of https://gh-stats.com has failed for 2m."
+
   - name: ghstats
     interval: 30s
     rules:
@@ -64,6 +80,30 @@ groups:
         labels: { severity: warning, project: groundstation, host: minipc }
         annotations:
           summary: "pantheos-app-1 is crash-looping"
+          description: "The container restarted more than 3 times in 15 minutes."
+
+      - alert: ContainerCrashLooping
+        expr: changes(container_start_time_seconds{name="pantheos-db-1"}[15m]) > 3
+        for: 0m
+        labels: { severity: warning, project: groundstation, host: minipc }
+        annotations:
+          summary: "pantheos-db-1 is crash-looping"
+          description: "The container restarted more than 3 times in 15 minutes."
+
+      - alert: ContainerCrashLooping
+        expr: changes(container_start_time_seconds{name="ghstats-generator"}[15m]) > 3
+        for: 0m
+        labels: { severity: warning, project: ghstats, host: minipc }
+        annotations:
+          summary: "ghstats-generator is crash-looping"
+          description: "The container restarted more than 3 times in 15 minutes."
+
+      - alert: ContainerCrashLooping
+        expr: changes(container_start_time_seconds{name="ghstats-fetcher"}[15m]) > 3
+        for: 0m
+        labels: { severity: warning, project: ghstats, host: minipc }
+        annotations:
+          summary: "ghstats-fetcher is crash-looping"
           description: "The container restarted more than 3 times in 15 minutes."
 
       - alert: HostDiskLow

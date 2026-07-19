@@ -19,8 +19,9 @@ def test_render_metrics_exposes_per_site_gauges(tmp_path, monkeypatch):
     body = caddy_exporter.render_metrics()
     assert "# TYPE pantheos_caddy_rps gauge" in body
     assert 'pantheos_caddy_rps{site="pantheos.app"}' in body
-    # researchviewer has no entries → zeroed series still present
+    # researchviewer and gh-stats have no entries → zeroed series still present
     assert 'pantheos_caddy_requests{site="researchviewer.org"} 0' in body
+    assert 'pantheos_caddy_requests{site="gh-stats.com"} 0' in body
     # pantheos.app: 1 of 4 requests is 5xx
     assert 'pantheos_caddy_requests{site="pantheos.app"} 4' in body
     assert 'pantheos_caddy_err_ratio{site="pantheos.app"} 0.25' in body

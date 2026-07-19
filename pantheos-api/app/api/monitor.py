@@ -71,11 +71,11 @@ def container_metrics(cid):
 def container_logs(cid):
     c = get_or_404(Container, cid)
     inv = entry(cid)
-    if inv and caddy_logs.available():
+    if inv and inv.get("hosts") and caddy_logs.available():
         return jsonify({"lines": caddy_logs.logs(inv["hosts"])})
     if caddy_logs.available():
-        # Real logging is up but this container isn't in the inventory: no
-        # fabricated log lines.
+        # Real logging is up but this container has no Caddy vhost (internal
+        # sidecar) or isn't in the inventory: no fabricated log lines.
         return jsonify({"lines": [], "monitored": False})
     return jsonify({"lines": metrics.container_logs(c)})
 
@@ -185,14 +185,17 @@ def _apply_real(d, inv):
     data (e.g. exporter down) degrades field-by-field to the seeded mock rather
     than blanking the card.
     """
-    name, site, probe = inv["cadvisor"], inv["site"], inv["probe"]
+    name = inv["cadvisor"]
+    site, probe = inv.get("site"), inv.get("probe")
     cpu = victoria.query(f'sum(rate(container_cpu_usage_seconds_total{{name="{name}"}}[2m])) * 100')
     mem = victoria.query(f'sum(container_memory_working_set_bytes{{name="{name}"}})')
     restarts = victoria.query(f'sum(changes(container_start_time_seconds{{name="{name}"}}[1h]))')
-    rps = victoria.query(f'pantheos_caddy_rps{{site="{site}"}}')
-    err = victoria.query(f'pantheos_caddy_err_ratio{{site="{site}"}}')
-    p95 = victoria.query(f'pantheos_caddy_p95_ms{{site="{site}"}}')
-    up_probe = victoria.query(f'probe_success{{instance="{probe}"}}')
+    # Request telemetry / uptime only exist for containers a public Caddy vhost
+    # fronts; internal sidecars (no site/probe) keep their seeded request fields.
+    rps = victoria.query(f'pantheos_caddy_rps{{site="{site}"}}') if site else None
+    err = victoria.query(f'pantheos_caddy_err_ratio{{site="{site}"}}') if site else None
+    p95 = victoria.query(f'pantheos_caddy_p95_ms{{site="{site}"}}') if site else None
+    up_probe = victoria.query(f'probe_success{{instance="{probe}"}}') if probe else None
 
     if cpu is not None:
         d["cpu"], d["cpuN"] = f"{round(cpu)}%", round(cpu)
@@ -209,6 +212,6 @@ def _apply_real(d, inv):
     if up_probe is not None:
         d["up"] = "AOS" if up_probe >= 1 else "LOS"
 
-    if err is not None or p95 is not None or up_probe is not None:
+    if err is not None or p95 is not None or up_probe is not None or restarts is not None:
         err_pct = err * 100 if err is not None else _parse_pct(d["err"])
         d["status"] = _derive_status(err_pct, p95, d["restarts"], d["up"])

@@ -17,6 +17,7 @@ from . import caddy_logs
 SITES = [
     ("pantheos.app", caddy_logs.PANTHEOS_HOSTS),
     ("researchviewer.org", caddy_logs.RESEARCHVIEWER_HOSTS),
+    ("gh-stats.com", caddy_logs.GHSTATS_HOSTS),
 ]
 
 _GAUGES = [

@@ -14,6 +14,7 @@ import time
 
 PANTHEOS_HOSTS = {"pantheos.app", "www.pantheos.app"}
 RESEARCHVIEWER_HOSTS = {"researchviewer.org", "www.researchviewer.org"}
+GHSTATS_HOSTS = {"gh-stats.com", "www.gh-stats.com"}
 _TAIL_BYTES = 262_144
 
 
