@@ -40,6 +40,12 @@ async function streamSSE(res, h) {
   }
 }
 
+const qs = (o) => {
+  const p = Object.entries(o).filter(([, v]) => v !== undefined && v !== null)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
+  return p ? `?${p}` : "";
+};
+
 export const api = {
   tickets: () => req("GET", "/api/tickets"),
   createTicket: (data) => req("POST", "/api/tickets", data),
@@ -48,7 +54,10 @@ export const api = {
   hosts: () => req("GET", "/api/hosts"),
   containers: () => req("GET", "/api/containers"),
   containerMetrics: (id) => req("GET", `/api/containers/${id}/metrics`),
-  containerLogs: (id) => req("GET", `/api/containers/${id}/logs`),
+  containerLogs: (id, { before, mode, limit } = {}) =>
+    req("GET", `/api/containers/${id}/logs${qs({ before, mode, limit })}`),
+  containerLogRange: (id, from, to) =>
+    req("GET", `/api/containers/${id}/logs/range${qs({ from, to })}`),
   usage: () => req("GET", "/api/monitor/usage"),
   errseries: () => req("GET", "/api/monitor/errseries"),
 

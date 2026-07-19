@@ -100,3 +100,38 @@ def container_logs(container):
         base.append(("info", "GET /healthz 200 2ms"))
     ts = log_timestamps(seed, len(base))
     return [{"t": ts[i], "lvl": lvl, "msg": msg} for i, (lvl, msg) in enumerate(base)]
+
+
+_LOG_ROUTES = ["/api/stats", "/api/user/shaymanor", "/healthz", "/api/repos", "/metrics"]
+_CLUSTER_CADENCE = {"flt": 22, "cau": 40, "go": 120}  # lines between error clusters
+
+
+def container_log_stream(container, n=180):
+    """Deterministic, monotonically-timestamped log history for seeding the DB.
+
+    Healthy (``go``) containers still get one sparse error cluster — mirroring the
+    real 'looks fine, occasional 5xx' case — so the smart view always has something
+    to collapse. ``LOS`` containers get a short signal-lost sequence instead.
+    """
+    seed = _seed_of(container.id)
+    t = 1_700_000_000 + seed * 37
+    out = [(t, "info", f"starting {container.id} ({container.image})"),
+           (t, "info", "connected to postgres · pool=10")]
+    if container.up == "LOS":
+        out += [(t, "info", "heartbeat ok"),
+                (t, "warn", "no telemetry ack from collector"),
+                (t, "err", "signal lost — host unreachable, entering intermittent mode")]
+        return out
+    cadence = _CLUSTER_CADENCE.get(container.status, 0)
+    for i in range(n):
+        t += 1 + int(_noise(seed, i) * 4)
+        if cadence and i > 0 and i % cadence == 0:
+            out += [(t, "warn", "redis cache miss — falling through to cold path"),
+                    (t, "err", "TypeError: cannot read properties of undefined (reading 'window')"),
+                    (t, "err", "  at rateLimit (middleware/ratelimit.js:41:18)"),
+                    (t, "err", f"GET {_LOG_ROUTES[i % len(_LOG_ROUTES)]} 500 3ms"),
+                    (t, "info", "hotfix applied · in-memory fallback active")]
+        else:
+            lat = 8 + int(_noise(seed, i + 100) * 40)
+            out.append((t, "info", f"GET {_LOG_ROUTES[i % len(_LOG_ROUTES)]} 200 {lat}ms"))
+    return out

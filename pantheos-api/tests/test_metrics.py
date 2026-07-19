@@ -55,3 +55,29 @@ def test_log_timestamps_rollover():
     ts = metrics.log_timestamps(7, 100)
     assert len(ts) == 100
     assert any(int(t[:2]) > 14 for t in ts)  # minutes rolled over into a new hour
+
+
+def test_container_log_stream_is_deterministic_and_clustered():
+    from app import metrics
+
+    class C:  # minimal container-like
+        id = "ghstats-edge"; image = "img"; status = "go"; up = "AOS"; cpu_n = 3
+
+    a = metrics.container_log_stream(C(), n=180)
+    b = metrics.container_log_stream(C(), n=180)
+    assert a == b                                            # deterministic
+    ts = [t for t, _, _ in a]
+    assert ts == sorted(ts)                                  # monotonic
+    assert any(lvl == "err" for _, lvl, _ in a)              # a go container gets a cluster
+    assert sum(1 for _, lvl, _ in a if lvl == "info") > 100  # long info runs to collapse
+
+
+def test_container_log_stream_los_short():
+    from app import metrics
+
+    class C:
+        id = "merlin-planner"; image = "img"; status = "los"; up = "LOS"; cpu_n = 0
+
+    rows = metrics.container_log_stream(C())
+    assert any(lvl == "err" for _, lvl, _ in rows)
+    assert len(rows) < 20

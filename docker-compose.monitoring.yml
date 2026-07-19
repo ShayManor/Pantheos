@@ -112,5 +112,23 @@ services:
       - /var/log/caddy:/var/log/caddy:ro
     restart: unless-stopped
 
+  # Tails the same access log into log_lines (source="caddy") so the Monitor
+  # station's container-logs endpoints serve real request lines (Task 6). Sibling
+  # of caddy-log-exporter, but writes to Postgres instead of exposing metrics.
+  caddy-log-ingest:
+    image: ghcr.io/shaymanor/pantheos:latest
+    entrypoint: ["python", "-m", "app.log_ingest"]
+    network_mode: host
+    environment:
+      CADDY_ACCESS_LOG: /var/log/caddy/access.log
+      PANTHEOS_DATABASE_URL: postgresql+psycopg://pantheos:pantheos@127.0.0.1:5432/pantheos
+      LOG_INGEST_INTERVAL: "5"
+    volumes:
+      - /var/log/caddy:/var/log/caddy:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   vmdata:

@@ -3,7 +3,7 @@ from . import scoring
 from . import seed_data as S
 from .models import (
     AgentModel, AgentRun, Area, Base, Container, DelphiMessage, DelphiSession,
-    Host, McpServer, MemoryFact, Project, Skill, Ticket, TicketDep, TicketLink,
+    Host, LogLine, McpServer, MemoryFact, Project, Skill, Ticket, TicketDep, TicketLink,
 )
 
 
@@ -43,6 +43,24 @@ def sync_models(session):
     session.query(AgentModel).delete()
     for i, mo in enumerate(S.MODELS):
         session.add(AgentModel(id=mo["id"], name=mo["name"], tag=mo["tag"], position=i))
+    session.commit()
+
+
+def seed_container_logs(session):
+    """Insert deterministic mock log history for any container lacking it.
+
+    Idempotent across seed + seed_sample: each pass only fills containers that
+    have no rows yet, so seed() covers the base set and seed_sample() covers the
+    demo set. Source is 'mock'; real 'caddy' rows come only from log_ingest.
+    """
+    from . import metrics
+    have = {cid for (cid,) in session.query(LogLine.container_id).distinct()}
+    for c in session.query(Container).all():
+        if c.id in have:
+            continue
+        session.add_all([
+            LogLine(container_id=c.id, source="mock", ts=ts, lvl=lvl, msg=msg)
+            for ts, lvl, msg in metrics.container_log_stream(c)])
     session.commit()
 
 
@@ -94,6 +112,7 @@ def seed(session):
         session.add(AgentModel(id=mo["id"], name=mo["name"], tag=mo["tag"], position=i))
 
     session.commit()
+    seed_container_logs(session)
 
 
 def seed_sample(session):
@@ -150,3 +169,4 @@ def seed_sample(session):
                                       tools=msg.get("tools"), position=j))
 
     session.commit()
+    seed_container_logs(session)

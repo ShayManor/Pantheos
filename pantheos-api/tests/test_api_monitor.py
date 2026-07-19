@@ -37,10 +37,41 @@ def test_container_metrics(client):
     assert client.get("/api/containers/NOPE/metrics").status_code == 404
 
 
-def test_container_logs(client):
-    d = client.get("/api/containers/ghstats-generator/logs").get_json()
-    assert len(d["lines"]) > 0
+def test_container_logs_smart_shape(client):
+    d = client.get("/api/containers/ghstats-edge/logs").get_json()
+    assert d["monitored"] is True
+    assert isinstance(d["items"], list) and len(d["items"]) > 0
+    assert any(it["type"] == "gap" for it in d["items"])          # long info runs collapsed
+    assert any(it.get("lvl") == "err" for it in d["items"] if it["type"] == "line")
     assert client.get("/api/containers/NOPE/logs").status_code == 404
+
+
+def test_container_logs_raw_mode_has_no_gaps(client):
+    d = client.get("/api/containers/ghstats-edge/logs?mode=raw").get_json()
+    assert all(it["type"] == "line" for it in d["items"])
+
+
+def test_container_logs_pagination(client):
+    p1 = client.get("/api/containers/ghstats-edge/logs?mode=raw&limit=10").get_json()
+    assert p1["next"] is not None
+    p2 = client.get(f"/api/containers/ghstats-edge/logs?mode=raw&limit=10&before={p1['next']}").get_json()
+    ids1 = {it["id"] for it in p1["items"]}
+    ids2 = {it["id"] for it in p2["items"]}
+    assert ids1 and ids2 and ids1.isdisjoint(ids2)               # older, non-overlapping page
+
+
+def test_container_log_range_returns_raw_lines(client):
+    raw = client.get("/api/containers/ghstats-edge/logs?mode=raw&limit=50").get_json()["items"]
+    ids = sorted(it["id"] for it in raw)
+    d = client.get(f"/api/containers/ghstats-edge/logs/range?from={ids[0]}&to={ids[3]}").get_json()
+    assert [l["id"] for l in d["lines"]] == sorted([ids[0], ids[1], ids[2], ids[3]], reverse=True)
+
+
+def test_log_range_empty_for_noninventory_under_caddy(client, tmp_path, monkeypatch):
+    # Real logging up, but this container isn't in the inventory: no range lines.
+    _caddy_log(tmp_path, monkeypatch)
+    d = client.get("/api/containers/gpu-api/logs/range?from=1&to=2").get_json()
+    assert d["lines"] == []
 
 
 def test_monitor_series(client):
@@ -183,7 +214,7 @@ def test_cadvisor_only_logs_empty_under_caddy(client, tmp_path, monkeypatch):
     # No public vhost → no access-log lines, and we don't fabricate any.
     _caddy_log(tmp_path, monkeypatch)
     d = client.get("/api/containers/pantheos-db-1/logs").get_json()
-    assert d["lines"] == [] and d["monitored"] is False
+    assert d["items"] == [] and d["monitored"] is False
 
 
 def test_container_metrics_from_victoria(client, monkeypatch):
@@ -238,23 +269,27 @@ def _caddy_log(tmp_path, monkeypatch):
     return p
 
 
-def test_pantheos_logs_from_caddy(client, tmp_path, monkeypatch):
-    _caddy_log(tmp_path, monkeypatch)
-    logs = client.get("/api/containers/pantheos-app-1/logs").get_json()["lines"]
-    assert any("/api/tickets" in l["msg"] for l in logs)
-    assert any(l["lvl"] == "err" for l in logs)  # the 5xx line
+def test_pantheos_logs_from_caddy(client, tmp_path, monkeypatch, session):
+    from app import log_ingest
+    p = _caddy_log(tmp_path, monkeypatch)          # writes a 5xx line for pantheos.app
+    log_ingest.run_once(session, str(p), now=1e9 + 100)
+    d = client.get("/api/containers/pantheos-app-1/logs?mode=raw").get_json()
+    assert d["monitored"] is True
+    assert any("/api/tickets" in it["msg"] for it in d["items"])
+    assert any(it["lvl"] == "err" for it in d["items"])
 
 
 def test_pantheos_logs_fall_back_to_mock(client, monkeypatch):
     monkeypatch.delenv("CADDY_ACCESS_LOG", raising=False)
-    assert len(client.get("/api/containers/pantheos-app-1/logs").get_json()["lines"]) > 0
+    d = client.get("/api/containers/pantheos-app-1/logs").get_json()
+    assert d["monitored"] is True and len(d["items"]) > 0        # seeded mock rows
 
 
 def test_logs_empty_for_noninventory_under_caddy(client, tmp_path, monkeypatch):
     # Real logging up, but this container isn't in the inventory: no log lines.
     _caddy_log(tmp_path, monkeypatch)
     d = client.get("/api/containers/gpu-api/logs").get_json()
-    assert d["lines"] == [] and d["monitored"] is False
+    assert d["items"] == [] and d["monitored"] is False
 
 
 def _rv_caddy_log(tmp_path, monkeypatch):
@@ -270,10 +305,13 @@ def _rv_caddy_log(tmp_path, monkeypatch):
     return p
 
 
-def test_rviewer_logs_from_caddy(client, tmp_path, monkeypatch):
-    _rv_caddy_log(tmp_path, monkeypatch)
-    logs = client.get("/api/containers/researchviewer/logs").get_json()["lines"]
-    assert logs and all("/paper/" in l["msg"] for l in logs)
+def test_rviewer_logs_from_caddy(client, tmp_path, monkeypatch, session):
+    from app import log_ingest
+    p = _rv_caddy_log(tmp_path, monkeypatch)
+    log_ingest.run_once(session, str(p), now=1e9 + 100)
+    d = client.get("/api/containers/researchviewer/logs?mode=raw").get_json()
+    assert d["monitored"] is True
+    assert any("/paper/" in it["msg"] for it in d["items"])
 
 
 def test_rviewer_project_users_are_real_visitor_count(client, tmp_path, monkeypatch):
@@ -285,3 +323,9 @@ def test_rviewer_project_users_are_real_visitor_count(client, tmp_path, monkeypa
 def test_rviewer_project_users_none_without_log(client, monkeypatch):
     monkeypatch.delenv("CADDY_ACCESS_LOG", raising=False)
     assert client.get("/api/projects").get_json()["rviewer"]["users"] is None
+
+
+def test_seed_populates_mock_log_lines(session):
+    from app.models import LogLine
+    n = session.query(LogLine).filter_by(container_id="ghstats-edge", source="mock").count()
+    assert n > 0

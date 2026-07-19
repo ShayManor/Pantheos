@@ -2,8 +2,8 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy import func
 
 from . import db, get_or_404
-from .. import caddy_logs, metrics, scoring, victoria
-from ..models import Area, Container, Host, Project, Ticket
+from .. import caddy_logs, logview, metrics, scoring, victoria
+from ..models import Area, Container, Host, LogLine, Project, Ticket
 from ..monitor_inventory import INVENTORY, PROJECT_HOSTS, entry
 
 bp = Blueprint("monitor", __name__, url_prefix="/api")
@@ -67,17 +67,45 @@ def container_metrics(cid):
     return jsonify(metrics.container_metrics(c))
 
 
+def _log_source(cid, inv):
+    """Which stored rows back this container's logs — mirrors _apply_real's split."""
+    if caddy_logs.available():
+        return "caddy" if inv and inv.get("hosts") else None
+    return "mock"
+
+
 @bp.get("/containers/<cid>/logs")
 def container_logs(cid):
-    c = get_or_404(Container, cid)
-    inv = entry(cid)
-    if inv and inv.get("hosts") and caddy_logs.available():
-        return jsonify({"lines": caddy_logs.logs(inv["hosts"])})
-    if caddy_logs.available():
-        # Real logging is up but this container has no Caddy vhost (internal
-        # sidecar) or isn't in the inventory: no fabricated log lines.
-        return jsonify({"lines": [], "monitored": False})
-    return jsonify({"lines": metrics.container_logs(c)})
+    get_or_404(Container, cid)
+    src = _log_source(cid, entry(cid))
+    if src is None:
+        return jsonify({"items": [], "next": None, "monitored": False})
+    before = request.args.get("before", type=int)
+    limit = min(request.args.get("limit", default=200, type=int), 500)
+    q = db().query(LogLine).filter_by(container_id=cid, source=src)
+    if before is not None:
+        q = q.filter(LogLine.id < before)
+    rows = q.order_by(LogLine.id.desc()).limit(limit).all()
+    nxt = rows[-1].id if len(rows) == limit else None
+    if request.args.get("mode") == "raw":
+        items = [{"type": "line", **logview.line(r)} for r in rows]
+    else:
+        items = logview.collapse(rows)
+    return jsonify({"items": items, "next": nxt, "monitored": True})
+
+
+@bp.get("/containers/<cid>/logs/range")
+def container_log_range(cid):
+    get_or_404(Container, cid)
+    src = _log_source(cid, entry(cid))
+    if src is None:
+        return jsonify({"lines": []})
+    lo = request.args.get("from", type=int)
+    hi = request.args.get("to", type=int)
+    rows = (db().query(LogLine).filter_by(container_id=cid, source=src)
+            .filter(LogLine.id >= lo, LogLine.id <= hi)
+            .order_by(LogLine.id.desc()).all())
+    return jsonify({"lines": [logview.line(r) for r in rows]})
 
 
 @bp.get("/monitor/usage")

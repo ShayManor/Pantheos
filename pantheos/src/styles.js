@@ -402,6 +402,12 @@ export const CSS = `
 .gs-logline .lv{font-weight:600;letter-spacing:0.03em;}
 .gs-logline .lv.info{color:var(--info);} .gs-logline .lv.warn{color:var(--caution);} .gs-logline .lv.err{color:var(--fault);}
 .gs-logline .mg{color:var(--ink);white-space:pre-wrap;word-break:break-word;}
+.gs-loggap{display:block;width:100%;text-align:center;font-family:var(--mono);font-size:11px;
+  color:var(--ink-3);background:none;border:none;border-top:1px dashed var(--line-2);
+  border-bottom:1px dashed var(--line-2);padding:6px 0;margin:4px 0;cursor:pointer;letter-spacing:0.04em;}
+.gs-loggap:hover{color:var(--ink);background:var(--surface-3);}
+.gs-loggap.older{border:none;}
+.gs-logline.ctx{opacity:0.72;}
 .gs-follow{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--go);padding:6px 11px;border:1px solid var(--go-line);background:var(--go-soft);border-radius:20px;}
 
 /* markdown + chain-of-thought */

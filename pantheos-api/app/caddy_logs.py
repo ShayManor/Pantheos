@@ -36,6 +36,18 @@ def _client_ip(req):
     return req.get("client_ip", "")
 
 
+def parse_record(line):
+    """One JSON access-log line → a normalized record, or None if unparseable."""
+    try:
+        rec = json.loads(line)
+        req = rec["request"]
+        return {"ts": float(rec["ts"]), "method": req["method"], "uri": req["uri"],
+                "status": int(rec["status"]), "dur": float(rec["duration"]),
+                "host": req["host"].split(":", 1)[0]}
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
 def _entries(hosts):
     """Parsed request records for ``hosts`` from the tail of the log, oldest first."""
     p = _log_path()

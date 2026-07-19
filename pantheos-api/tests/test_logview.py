@@ -2,6 +2,7 @@ from app.models import IngestState, LogLine
 
 
 def test_logline_roundtrip(session):
+    session.query(LogLine).filter_by(container_id="ghstats-edge").delete()  # clear seeded mock rows
     session.add(LogLine(container_id="ghstats-edge", source="mock",
                         ts=1_700_000_000.0, lvl="err", msg="boom"))
     session.commit()
@@ -73,6 +74,7 @@ def test_prune_keeps_errors_windows_info(session):
 def test_prune_drops_beyond_7_days(session):
     now = 1_700_100_000.0
     cid = "ghstats-generator"
+    session.query(LogLine).filter_by(container_id=cid).delete()  # clear seeded mock rows
     _add(session, cid, now - 8 * 86400, "err")   # 8d old error → gone by hard ceiling
     _add(session, cid, now - 60, "err")          # recent error → kept
     session.commit()
