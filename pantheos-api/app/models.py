@@ -4,7 +4,7 @@
 consumes, so the UI is fed by the API without reshaping on the client.
 """
 from sqlalchemy import (
-    Boolean, Column, Float, ForeignKey, Integer, JSON, String, Text,
+    BigInteger, Boolean, Column, Float, ForeignKey, Index, Integer, JSON, String, Text,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 
@@ -279,3 +279,21 @@ class DelphiMessage(Base):
         if self.tools:
             d["tools"] = self.tools
         return d
+
+
+class LogLine(Base):
+    __tablename__ = "log_lines"
+    id = Column(Integer, primary_key=True)            # autoincrement; the pagination cursor
+    container_id = Column(String, ForeignKey("containers.id"), nullable=False)
+    source = Column(String, nullable=False)           # "mock" | "caddy"
+    ts = Column(Float, nullable=False)                # epoch seconds (display + 7d prune)
+    lvl = Column(String, nullable=False)              # "info" | "warn" | "err"
+    msg = Column(Text, nullable=False)
+    __table_args__ = (Index("ix_log_lines_cid_source_id", "container_id", "source", "id"),)
+
+
+class IngestState(Base):
+    __tablename__ = "ingest_state"
+    path = Column(String, primary_key=True)           # the CADDY_ACCESS_LOG path
+    inode = Column(BigInteger, nullable=False)
+    offset = Column(BigInteger, nullable=False)
