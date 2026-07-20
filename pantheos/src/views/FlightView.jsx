@@ -10,6 +10,19 @@ import Thinking from "../components/Thinking.jsx";
 import { TOOLMAP } from "../lib/helpers.js";
 import { api } from "../api.js";
 
+// Reconcile the server's message list into local state: keep the client-only
+// greeting bubble (flagged `__greeting`) at the front and carry forward the
+// client-only attachment chips positionally (the API doesn't persist them).
+function mergeServer(prev, serverMsgs) {
+  const lead = prev.filter((m) => m.__greeting);
+  const body = prev.filter((m) => !m.__greeting);
+  const merged = serverMsgs.map((sm, i) =>
+    body[i]?.atts ? { ...sm, atts: body[i].atts } : sm);
+  return [...lead, ...merged];
+}
+
+const greeting = (text) => ({ who: "flight", text, __greeting: true });
+
 function RunRow({ r }) {
   const { go } = useNav();
   return (
@@ -31,7 +44,6 @@ export default function FlightView() {
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState("");
   const [atts, setAtts] = useState([]);
-  const [thinking, setThinking] = useState(false);
   const [recording, setRecording] = useState(false);
   const [interim, setInterim] = useState("");
   const [drawer, setDrawer] = useState(null); // null | connectors | skills | memory
@@ -51,15 +63,29 @@ export default function FlightView() {
   useEffect(() => {
     api.delphiContext().then((d) => {
       setCtx(d);
-      setMsgs([{ who: "flight", text: d.greeting }]);
+      setMsgs([greeting(d.greeting)]);
       setSessions(d.sessions);
       setServers(d.connectors);
       setSkills(d.skills);
       setModel(d.models[0]);
     });
   }, []);
-  useEffect(() => { scrollRef.current?.scrollTo(0, 1e6); }, [msgs, thinking]);
+  useEffect(() => { scrollRef.current?.scrollTo(0, 1e6); }, [msgs]);
   useEffect(() => () => recRef.current?.abort(), []);
+
+  // Poll the session while a turn is queued or running so the background
+  // worker's reply (and its partial text) streams in — independent of whether
+  // this tab was the one that sent it. Stops once nothing is pending.
+  const pending = msgs.some((m) => m.status === "queued" || m.status === "running");
+  useEffect(() => {
+    if (!activeSess || !pending) return;
+    const id = setInterval(() => {
+      api.getSession(activeSess)
+        .then((full) => setMsgs((m) => mergeServer(m, full.msgs)))
+        .catch(() => { /* transient; keep polling */ });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [activeSess, pending]);
 
   const suggestions = [
     ["What's due this week?", "Deadlines, ranked by urgency"],
@@ -72,10 +98,7 @@ export default function FlightView() {
     const text = q ?? input.trim();
     if (!text && atts.length === 0) return;
     const sent = atts;
-    setMsgs((m) => [...m, { who: "me", text: text || "(attachment)", atts: sent },
-                          { who: "flight", text: "", reasoning: "", tools: [], live: true }]);
-    setInput(""); setAtts([]); setThinking(true);
-    const patchLast = (fn) => setMsgs((m) => m.map((x, i) => (i === m.length - 1 ? fn(x) : x)));
+    setInput(""); setAtts([]);
     let sess = activeSess;
     if (!sess) {
       const s = await api.createSession(text.slice(0, 42));
@@ -83,13 +106,21 @@ export default function FlightView() {
       setActiveSess(s.id);
       setSessions((x) => [s, ...x]);
     }
-    api.chatStream(sess, text, {
-      onReasoning: (d) => patchLast((x) => ({ ...x, reasoning: x.reasoning + d })),
-      onText: (d) => { setThinking(false); patchLast((x) => ({ ...x, text: x.text + d, live: false })); },
-      onTool: (t) => patchLast((x) => x.tools.includes(t.name) ? x : ({ ...x, tools: [...x.tools, t.name] })),
-      onDone: (p) => { setThinking(false); patchLast((x) => ({ ...x, text: p.text, reasoning: p.reasoning, tools: p.tools, live: false })); },
-      onError: (e) => { setThinking(false); patchLast((x) => ({ ...x, text: x.text || "⚠️ Delphi is unreachable.", live: false })); toast(e.message || "Stream error"); },
-    }, model?.id);
+    // Show the turn instantly; the queued placeholder resolves via polling.
+    setMsgs((m) => [...m, { who: "me", text: text || "(attachment)", atts: sent },
+                          { who: "flight", text: "", status: "queued" }]);
+    try {
+      const full = await api.enqueueChat(sess, text || "(attachment)", model?.id);
+      setMsgs((m) => mergeServer(m, full.msgs));
+    } catch (e) {
+      toast(e.message || "Couldn't send");
+    }
+  };
+  const cancelMsg = (id) => {
+    api.cancelMessage(id)
+      .then(() => api.getSession(activeSess))
+      .then((full) => setMsgs((m) => mergeServer(m, full.msgs)))
+      .catch((e) => toast(e.message || "Couldn't cancel"));
   };
   const onFiles = (e) => {
     const picked = Array.from(e.target.files || []).map((f) => ({ name: f.name, img: f.type.startsWith("image/") }));
@@ -151,13 +182,13 @@ export default function FlightView() {
 
   const newChat = () => {
     setActiveSess(null);
-    setMsgs([{ who: "flight", text: ctx.greeting }]);
+    setMsgs([greeting(ctx.greeting)]);
     toast("Started a new chat");
   };
   const loadSession = (sess) => {
     api.getSession(sess.id).then((full) => {
       setActiveSess(full.id);
-      setMsgs(full.msgs.length ? full.msgs : [{ who: "flight", text: ctx.greeting }]);
+      setMsgs(full.msgs.length ? full.msgs : [greeting(ctx.greeting)]);
       setHistOpen(false);
     });
   };
@@ -218,8 +249,8 @@ export default function FlightView() {
                 {m.who === "flight" ? <Radio size={15} /> : <span style={{ fontFamily: "var(--mono)", fontSize: 11 }}>S</span>}
               </div>
               <div style={{ minWidth: 0 }}>
-                {m.who === "flight" && (m.reasoning || m.live) && (
-                  <Thinking reasoning={m.reasoning} live={m.live && !m.text} />
+                {m.who === "flight" && (m.reasoning || ((m.status === "queued" || m.status === "running") && !m.text)) && (
+                  <Thinking reasoning={m.reasoning} live={(m.status === "queued" || m.status === "running") && !m.text} />
                 )}
                 {m.tools && m.tools.length > 0 && (
                   <div className="gs-tools">
@@ -228,13 +259,21 @@ export default function FlightView() {
                     ); })}
                   </div>
                 )}
-                <div className="gs-bub">{m.who === "flight" ? <Markdown text={m.text} /> : m.text}</div>
+                {(m.who === "me" || m.text) && (
+                  <div className="gs-bub">{m.who === "flight" ? <Markdown text={m.text} /> : m.text}</div>
+                )}
                 {m.atts && m.atts.length > 0 && (
                   <div className="gs-atts" style={{ marginTop: 7, marginBottom: 0 }}>
                     {m.atts.map((a, j) => <span key={j} className="gs-att">{a.img ? <Hash size={12} /> : <FileText size={12} />}<span className="nm">{a.name}</span></span>)}
                   </div>
                 )}
-                {m.who === "flight" && (
+                {m.status === "queued" && (
+                  <div className="gs-msg-copy">
+                    <span className="pill neu" style={{ fontSize: 10 }}>Queued</span>
+                    {m.id && <button onClick={() => cancelMsg(m.id)}><X size={11} />Cancel</button>}
+                  </div>
+                )}
+                {m.who === "flight" && m.text && (
                   <div className="gs-msg-copy">
                     <button onClick={() => copy(m.text)}><Copy size={11} />Copy</button>
                   </div>

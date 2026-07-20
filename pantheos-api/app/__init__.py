@@ -35,6 +35,10 @@ def create_app(overrides=None):
 
     register_blueprints(app)
 
+    if app.config.get("RUN_DELPHI_WORKER"):  # pragma: no cover - server-only thread
+        from . import delphi_worker
+        delphi_worker.start(app)
+
     # Serve the built frontend at "/" when a dist path is configured (container
     # deploy). The API keeps priority: registered /api/* rules match first, and
     # unmatched /api/* paths 404 as JSON rather than falling through to index.

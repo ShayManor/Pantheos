@@ -47,7 +47,7 @@ def create_ticket():
     deadline = data.get("deadline_hours")
     effort = data.get("effort_hours")
     summary = (data.get("summary") or "").strip() or title
-    body = (data.get("body") or "").strip() or summary
+    body = (data.get("body") or "").strip()
     score = scoring.compute_score(pri, scoring.own_urgency(deadline, effort))
 
     # Unique id: a 3-letter prefix + a number above every existing suffix.

@@ -108,7 +108,7 @@ def create_ticket(session, title, area_id=None, project_key=None, pri=2,
         return {"error": "invalid priority", "pri": pri}
 
     summary = (summary or "").strip() or title
-    body = (body or "").strip() or summary
+    body = (body or "").strip()
     prefix = re.sub(r"[^A-Za-z]", "", project_key or area_id)[:3].upper() or "TKT"
     nums = [int(re.sub(r"\D", "", tid) or 0) for (tid,) in session.query(Ticket.id).all()]
     number = (max(nums) + 1) if nums else 1

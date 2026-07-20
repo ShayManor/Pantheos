@@ -22,6 +22,7 @@ def test_create_ticket_scores_and_ids(session):
     t = tools.create_ticket(session, title="Port to Rubik Pi", project_key="merlin",
                             pri=1, deadline_hours=24, effort_hours=4)
     assert t["proj"] == "merlin" and t["title"] == "Port to Rubik Pi"
+    assert t["body"] == ""  # body is NOT a copy of summary/title when omitted
     assert t["life"] == "queued" and t["agent"] == "idle" and t["source"] == "delphi"
     assert float(t["score"]) > 0 and t["due"] == "in 1d"
     # unknown project / missing area / bad pri / no title

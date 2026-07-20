@@ -270,6 +270,9 @@ class DelphiMessage(Base):
     text = Column(Text, nullable=False)
     reasoning = Column(Text, nullable=True)
     tools = Column(JSON, nullable=True)
+    # queued | running | done | error -- the assistant reply's lifecycle in the
+    # background queue. User rows and every pre-queue/seed row are "done".
+    status = Column(String, nullable=False, default="done", server_default="done")
     position = Column(Integer, nullable=False, default=0)
 
     def to_dict(self):
@@ -278,6 +281,9 @@ class DelphiMessage(Base):
             d["reasoning"] = self.reasoning
         if self.tools:
             d["tools"] = self.tools
+        if self.who == "flight":
+            d["id"] = self.id
+            d["status"] = self.status or "done"
         return d
 
 

@@ -16,12 +16,15 @@ def test_list_tickets(client):
 def test_create_ticket_with_project(client):
     r = client.post("/api/tickets", json={
         "title": "New investigation", "project_key": "ghstats", "pri": 1,
-        "effort_hours": 4, "deadline_hours": 72, "summary": "look into it"})
+        "effort_hours": 4, "deadline_hours": 72, "summary": "look into it",
+        "body": "## Repro\nHit `/api/foo` and it 500s."})
     assert r.status_code == 201
     t = r.get_json()
     assert t["title"] == "New investigation"
     assert t["proj"] == "ghstats"
     assert t["area"] == "SIDE PROJECTS"
+    assert t["summary"] == "look into it"
+    assert t["body"] == "## Repro\nHit `/api/foo` and it 500s."  # distinct longer context
     assert t["life"] == "queued" and t["agent"] == "idle" and t["source"] == "manual"
     assert t["due"] == "in 3d"           # derived from deadline_hours
     assert float(t["score"]) > 0          # derived score
@@ -37,6 +40,7 @@ def test_create_ticket_area_only_defaults(client):
     assert t["pri"] == 2                   # default priority
     assert t["due"] is None                # no deadline
     assert t["summary"] == "Study for midterm"  # summary defaults to title
+    assert t["body"] == ""                 # body is NOT a copy of summary when omitted
 
 
 def test_create_ticket_validation(client):

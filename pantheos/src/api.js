@@ -11,7 +11,7 @@ async function req(method, url, body) {
 }
 
 // Parse an SSE-style body (frames separated by \n\n; `event:`/`data:` lines)
-// and dispatch to handler callbacks. Shared by chatStream and ticketRunStream.
+// and dispatch to handler callbacks. Used by ticketRunStream.
 async function streamSSE(res, h) {
   if (!res.ok || !res.body) { h.onError?.({ message: `HTTP ${res.status}` }); return; }
   const reader = res.body.getReader();
@@ -77,14 +77,9 @@ export const api = {
   listSessions: () => req("GET", "/api/delphi/sessions"),
   getSession: (id) => req("GET", `/api/delphi/sessions/${id}`),
   deleteSession: (id) => req("DELETE", `/api/delphi/sessions/${id}`),
-  chatStream: async (sessionId, text, h, model) => {
-    const res = await fetch("/api/delphi/chat/stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId, text, model }),
-    });
-    await streamSSE(res, h);
-  },
+  enqueueChat: (sessionId, text, model) =>
+    req("POST", "/api/delphi/chat", { session_id: sessionId, text, model }),
+  cancelMessage: (id) => req("DELETE", `/api/delphi/messages/${id}`),
   draftTicket: (ctx) => req("POST", "/api/delphi/draft_ticket", ctx),
   addConnector: (name, url, token) => req("POST", "/api/delphi/connectors", { name, url, token }),
   toggleConnector: (id, on) => req("PATCH", `/api/delphi/connectors/${id}`, { on }),

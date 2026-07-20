@@ -24,7 +24,7 @@ export default defineConfig({
     {
       command: "venv/bin/python -c \"from app import create_app; create_app().run(host='127.0.0.1', port=8000, threaded=True)\"",
       cwd: apiDir,
-      env: { PANTHEOS_ALLOW_RESEED: "1" },
+      env: { PANTHEOS_ALLOW_RESEED: "1", PANTHEOS_RUN_DELPHI_WORKER: "1" },
       url: "http://127.0.0.1:8000/api/health",
       reuseExistingServer: true,
       timeout: 30000,

@@ -23,6 +23,7 @@ export default function NewTicketModal({ onClose }) {
   const [effort, setEffort] = useState("");
   const [deadline, setDeadline] = useState("");
   const [summary, setSummary] = useState("");
+  const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [drafting, setDrafting] = useState(false);
 
@@ -64,6 +65,7 @@ export default function NewTicketModal({ onClose }) {
     if (kind === "project") payload.project_key = id;
     else payload.area_id = id;
     if (summary.trim()) payload.summary = summary.trim();
+    if (body.trim()) payload.body = body.trim();
     if (effort) payload.effort_hours = Number(effort);
     if (deadline) payload.deadline_hours = Number(deadline);
     setBusy(true);
@@ -129,6 +131,13 @@ export default function NewTicketModal({ onClose }) {
             <input className="gs-input" style={{ width: "100%", fontFamily: "var(--sans)", fontSize: 13 }}
               value={summary} onChange={(e) => setSummary(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="One line — what this ticket is" />
+          </div>
+
+          <div>
+            <label style={fieldLabel}>Context <span style={{ textTransform: "none", letterSpacing: 0 }}>(markdown, optional)</span></label>
+            <textarea className="gs-input" style={{ width: "100%", fontFamily: "var(--sans)", fontSize: 13, minHeight: 96, resize: "vertical", lineHeight: 1.55 }}
+              value={body} onChange={(e) => setBody(e.target.value)}
+              placeholder="Longer problem statement — links, repro steps, acceptance criteria…" />
           </div>
 
           <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>

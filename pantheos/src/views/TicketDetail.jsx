@@ -7,6 +7,7 @@ import { useNav } from "../nav.jsx";
 import { LifePill } from "../components/pills.jsx";
 import ConfirmModal from "../components/ConfirmModal.jsx";
 import DelphiActivity from "../components/DelphiActivity.jsx";
+import Markdown from "../components/Markdown.jsx";
 import { api } from "../api.js";
 import { autoLabel, linkHref, LINK_ICON, LINK_KIND, openExternal } from "../lib/helpers.js";
 
@@ -48,10 +49,12 @@ export default function TicketDetail({ id }) {
             <div className="gs-body-text muted">{t.report}</div>
           </div>
         )}
-        <div className="gs-section">
-          <div className="gs-section-h"><Layers size={12} />PROBLEM STATEMENT · agent-written</div>
-          <div className="gs-body-text">{t.body}</div>
-        </div>
+        {t.body && t.body.trim() && t.body.trim() !== (t.summary || "").trim() && (
+          <div className="gs-section">
+            <div className="gs-section-h"><Layers size={12} />PROBLEM STATEMENT · agent-written</div>
+            <div className="gs-body-text"><Markdown text={t.body} /></div>
+          </div>
+        )}
         {run && (
           <div className="gs-section">
             <DelphiActivity run={run} />

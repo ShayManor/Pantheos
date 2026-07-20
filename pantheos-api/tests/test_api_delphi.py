@@ -116,23 +116,6 @@ def test_message_reasoning_and_session_link(session):
     assert "reasoning" not in me  # unset reasoning is omitted
 
 
-def _sse_events(resp):
-    """Parse an SSE body into [(event, json-data-str), ...]."""
-    import json
-    out = []
-    for frame in resp.get_data(as_text=True).split("\n\n"):
-        if not frame.strip():
-            continue
-        ev = data = None
-        for line in frame.splitlines():
-            if line.startswith("event:"):
-                ev = line[6:].strip()
-            elif line.startswith("data:"):
-                data = line[5:].strip()
-        out.append((ev, json.loads(data)))
-    return out
-
-
 def test_session_crud(client):
     created = client.post("/api/delphi/sessions", json={"title": "My chat"})
     assert created.status_code == 201
@@ -150,70 +133,46 @@ def test_session_default_title(client):
     assert r.get_json()["title"] == "New chat"
 
 
-def test_chat_stream_persists_and_streams(client):
+def test_chat_enqueues_user_and_queued_placeholder(client):
     sid = client.post("/api/delphi/sessions", json={}).get_json()["id"]
-    resp = client.post("/api/delphi/chat/stream",
-                       json={"session_id": sid, "text": "what is due this week"})
-    assert resp.status_code == 200
-    assert resp.mimetype == "text/event-stream"
-    events = _sse_events(resp)
-    types = [e for e, _ in events]
-    assert types[0] == "reasoning" and types[-1] == "done"
-    done = events[-1][1]
-    # persisted: user msg + assistant msg with reasoning + tools + hermes id
-    sess = client.get(f"/api/delphi/sessions/{sid}").get_json()
-    assert sess["hermes_session_id"] == done["hermes_session_id"]
-    whos = [m["who"] for m in sess["msgs"]]
-    assert whos == ["me", "flight"]
-    assert sess["msgs"][1]["reasoning"] == done["reasoning"]
-    assert sess["msgs"][1]["tools"] == ["calendar", "brightspace", "queue"]
+    r = client.post("/api/delphi/chat",
+                    json={"session_id": sid, "text": "what is due this week"})
+    assert r.status_code == 201
+    msgs = r.get_json()["msgs"]
+    # a reserved me→flight pair; the reply is queued (empty) for the worker
+    assert [m["who"] for m in msgs] == ["me", "flight"]
+    assert msgs[0]["text"] == "what is due this week"
+    assert msgs[1]["status"] == "queued" and msgs[1]["text"] == ""
+    assert isinstance(msgs[1]["id"], int)
+    # user rows carry no status/id in the served shape
+    assert "status" not in msgs[0] and "id" not in msgs[0]
 
 
-def test_chat_stream_threads_prior_turns_as_history(client, monkeypatch):
-    captured = {}
-
-    def spy(text, hermes_session_id, model=None, history=None):
-        captured["history"] = history
-        yield {"type": "done", "text": "ok", "reasoning": "", "tools": [],
-               "hermes_session_id": hermes_session_id or "s"}
-
-    monkeypatch.setattr("app.acp.run_turn", spy)
-    sid = client.post("/api/delphi/sessions", json={}).get_json()["id"]
-
-    # First turn: no prior context.
-    _sse_events(client.post("/api/delphi/chat/stream",
-                            json={"session_id": sid, "text": "my name is Shay"}))
-    assert captured["history"] == []
-
-    # Second turn: the first user+assistant turns replay as OpenAI-style history,
-    # oldest-first, and the current turn is NOT included (it is passed as text).
-    _sse_events(client.post("/api/delphi/chat/stream",
-                            json={"session_id": sid, "text": "what is my name"}))
-    assert captured["history"] == [
-        {"role": "user", "content": "my name is Shay"},
-        {"role": "assistant", "content": "ok"},
-    ]
-
-
-def test_chat_stream_missing_session_404(client):
-    assert client.post("/api/delphi/chat/stream",
+def test_chat_missing_session_404(client):
+    assert client.post("/api/delphi/chat",
                        json={"session_id": "nope", "text": "hi"}).status_code == 404
 
 
-def test_chat_stream_transport_error(client, monkeypatch):
+def test_cancel_queued_message_removes_pair(client):
     sid = client.post("/api/delphi/sessions", json={}).get_json()["id"]
+    fid = client.post("/api/delphi/chat",
+                      json={"session_id": sid, "text": "one"}).get_json()["msgs"][1]["id"]
+    assert client.delete(f"/api/delphi/messages/{fid}").status_code == 200
+    # both the placeholder and its paired user row are gone
+    assert client.get(f"/api/delphi/sessions/{sid}").get_json()["msgs"] == []
+    # the row no longer exists
+    assert client.delete(f"/api/delphi/messages/{fid}").status_code == 404
 
-    def boom(text, hermes_session_id, model=None, history=None):
-        raise RuntimeError("transport down")
 
-    monkeypatch.setattr("app.acp.run_turn", boom)
-    resp = client.post("/api/delphi/chat/stream",
-                       json={"session_id": sid, "text": "hi"})
-    events = _sse_events(resp)
-    assert events[-1] == ("error", {"type": "error", "message": "transport down"})
-    # nothing persisted for the assistant turn on failure
-    whos = [m["who"] for m in client.get(f"/api/delphi/sessions/{sid}").get_json()["msgs"]]
-    assert whos == ["me"]
+def test_cancel_rejects_non_queued(client, app):
+    sid = client.post("/api/delphi/sessions", json={}).get_json()["id"]
+    fid = client.post("/api/delphi/chat",
+                      json={"session_id": sid, "text": "x"}).get_json()["msgs"][1]["id"]
+    with app.app_context():
+        from app.models import DelphiMessage
+        app.db_session.get(DelphiMessage, fid).status = "running"
+        app.db_session.commit()
+    assert client.delete(f"/api/delphi/messages/{fid}").status_code == 409
 
 
 def test_health(client):

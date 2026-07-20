@@ -9,12 +9,19 @@ test("create a ticket via the modal", async ({ page }) => {
   await page.locator(".gs-pal select").first().selectOption("project:ghstats");
   await page.locator(".gs-pal select").nth(1).selectOption("1"); // P1
   await page.locator(".gs-pal select").nth(2).selectOption("72"); // in 3 days
+  await page.getByPlaceholder("One line — what this ticket is").fill("OAuth login for the dashboard");
+  await page.getByPlaceholder(/Longer problem statement/).fill("## Steps\n- register the app\n- store the client secret");
   await page.getByRole("button", { name: "Create ticket" }).click();
 
   // navigates to the new ticket's detail
   await expect(page.getByRole("heading", { name: "Wire up OAuth" })).toBeVisible();
   await expect(page.locator(".gs-toast")).toContainText("Created");
   await expect(page.getByText("in 3d")).toBeVisible(); // derived due label
+
+  // the longer context renders as markdown in its own section (not a copy of the summary)
+  await expect(page.getByText("PROBLEM STATEMENT", { exact: false })).toBeVisible();
+  await expect(page.locator(".gs-md h2", { hasText: "Steps" })).toBeVisible();
+  await expect(page.locator(".gs-md li", { hasText: "register the app" })).toBeVisible();
 
   // back to the queue — now 10 tickets, the new one present
   await page.locator(".gs-nav-item", { hasText: "Queue" }).click();
@@ -40,6 +47,18 @@ test("Delphi drafts the ticket live, then the user edits and creates", async ({ 
 
   await expect(page.getByRole("heading", { name: "Port MERLIN inference to Rubik Pi 5" })).toBeVisible();
   await expect(page.locator(".gs-toast")).toContainText("Created");
+});
+
+test("a ticket with no context shows no duplicated problem statement", async ({ page }) => {
+  await page.getByRole("button", { name: "New ticket" }).click();
+  await page.getByPlaceholder("What needs doing?").fill("Rotate the API keys");
+  await page.locator(".gs-pal select").first().selectOption("project:ghstats");
+  await page.getByPlaceholder("One line — what this ticket is").fill("Rotate the leaked GHCR token");
+  await page.getByRole("button", { name: "Create ticket" }).click();
+
+  await expect(page.getByRole("heading", { name: "Rotate the API keys" })).toBeVisible();
+  await expect(page.getByText("Rotate the leaked GHCR token")).toBeVisible(); // summary shown once
+  await expect(page.getByText("PROBLEM STATEMENT", { exact: false })).toHaveCount(0);
 });
 
 test("the new-ticket create button is disabled until a title is entered", async ({ page }) => {

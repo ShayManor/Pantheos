@@ -1,11 +1,9 @@
-import json
 import uuid
 
-from flask import Blueprint, Response, jsonify, request, stream_with_context
+from flask import Blueprint, jsonify, request
 from sqlalchemy import func
 
 from . import db, get_or_404
-from .. import acp
 from .. import delphi as delphi_logic
 from .. import hermes_connectors
 from ..models import (AgentModel, AgentRun, Area, DelphiMessage, DelphiSession,
@@ -79,56 +77,40 @@ def delete_session(sid):
     return jsonify({"status": "deleted"})
 
 
-@bp.post("/chat/stream")
-def chat_stream():
+@bp.post("/chat")
+def chat():
+    """Enqueue a user turn. Persists the user row plus a queued assistant
+    placeholder (both position-reserved in one commit, guaranteeing me→flight
+    ordering) and returns immediately; the background worker fills the reply."""
     data = request.get_json(silent=True) or {}
     sess = get_or_404(DelphiSession, data.get("session_id"))
     text = (data.get("text") or "").strip()
-    model = data.get("model") or None          # UI-selected model id (openai backend)
-    # Captured before the commit below expires `sess`: the streaming generator
-    # resumes after the request context has been torn down and re-pushed by
-    # stream_with_context, by which point ORM attribute access on `sess`
-    # would raise DetachedInstanceError.
-    sess_id = sess.id
-    hermes_session_id = sess.hermes_session_id
-
-    # Prior turns of this session, oldest-first, as OpenAI-style chat history so
-    # the model has conversational memory (see acp.run_turn). Built before the
-    # current user turn is persisted so it isn't duplicated with `text` below.
-    history = [
-        {"role": "assistant" if m.who == "flight" else "user", "content": m.text}
-        for m in db().query(DelphiMessage)
-        .filter(DelphiMessage.session_id == sess_id)
-        .order_by(DelphiMessage.position)
-    ]
-
-    # Persist the user turn immediately.
-    db().add(DelphiMessage(session_id=sess_id, who="me", text=text,
-                           position=_tail_position(DelphiMessage)))
+    base = _tail_position(DelphiMessage)
+    db().add(DelphiMessage(session_id=sess.id, who="me", text=text,
+                           status="done", position=base))
+    db().add(DelphiMessage(session_id=sess.id, who="flight", text="",
+                           status="queued", position=base + 1))
     db().commit()
+    return jsonify(get_or_404(DelphiSession, sess.id).to_dict()), 201
 
-    def generate():
-        final = None
-        try:
-            for ev in acp.run_turn(text, hermes_session_id, model, history):
-                if ev["type"] == "done":
-                    final = ev
-                yield f"event: {ev['type']}\ndata: {json.dumps(ev)}\n\n"
-        except Exception as exc:  # surface transport failures to the UI
-            err = {"type": "error", "message": str(exc)}
-            yield f"event: error\ndata: {json.dumps(err)}\n\n"
-        # Persist the assistant turn (whatever completed).
-        if final is not None:
-            if final.get("hermes_session_id"):
-                db().get(DelphiSession, sess_id).hermes_session_id = final["hermes_session_id"]
-            db().add(DelphiMessage(
-                session_id=sess_id, who="flight", text=final["text"],
-                reasoning=final.get("reasoning") or None,
-                tools=final.get("tools") or None,
-                position=_tail_position(DelphiMessage)))
-            db().commit()
 
-    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+@bp.delete("/messages/<int:mid>")
+def cancel_message(mid):
+    """Cancel a still-queued turn: remove the assistant placeholder and its
+    paired user row. Rejected (409) once the turn is running or done."""
+    msg = get_or_404(DelphiMessage, mid)
+    if msg.who != "flight" or (msg.status or "done") != "queued":
+        return jsonify({"error": "only queued messages can be cancelled"}), 409
+    user_row = (db().query(DelphiMessage)
+                .filter(DelphiMessage.session_id == msg.session_id,
+                        DelphiMessage.position < msg.position,
+                        DelphiMessage.who == "me")
+                .order_by(DelphiMessage.position.desc()).first())
+    if user_row is not None:
+        db().delete(user_row)
+    db().delete(msg)
+    db().commit()
+    return jsonify({"status": "cancelled"})
 
 
 @bp.post("/draft_ticket")
