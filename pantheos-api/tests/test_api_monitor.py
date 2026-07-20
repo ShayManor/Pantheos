@@ -210,11 +210,31 @@ def test_cadvisor_only_metrics_series(client, monkeypatch):
     assert len(d["series"]) == 20 and d["series"][0] == {"d": 0, "v": 3.0}
 
 
-def test_cadvisor_only_logs_empty_under_caddy(client, tmp_path, monkeypatch):
-    # No public vhost → no access-log lines, and we don't fabricate any.
-    _caddy_log(tmp_path, monkeypatch)
-    d = client.get("/api/containers/pantheos-db-1/logs").get_json()
-    assert d["items"] == [] and d["monitored"] is False
+def test_cadvisor_only_logs_from_docker_source(client, tmp_path, monkeypatch, session):
+    # No public vhost, but the container now serves its own stdout (source="docker").
+    from app.models import LogLine
+    _caddy_log(tmp_path, monkeypatch)                    # caddy_logs.available() → True
+    session.add(LogLine(container_id="pantheos-db-1", source="docker",
+                        ts=1e9, lvl="err", msg="FATAL: connection refused"))
+    session.commit()
+    d = client.get("/api/containers/pantheos-db-1/logs?mode=raw").get_json()
+    assert d["monitored"] is True
+    assert any("connection refused" in it["msg"] for it in d["items"])
+
+
+def test_vhost_logs_merge_docker_and_caddy(client, tmp_path, monkeypatch, session):
+    # A vhost container shows BOTH its stdout (docker) and HTTP access lines (caddy).
+    from app import log_ingest
+    from app.models import LogLine
+    p = _caddy_log(tmp_path, monkeypatch)                # access lines for pantheos.app
+    log_ingest.run_once(session, str(p), now=1e9 + 100)
+    session.add(LogLine(container_id="pantheos-app-1", source="docker",
+                        ts=1e9, lvl="info", msg="gunicorn booting worker"))
+    session.commit()
+    d = client.get("/api/containers/pantheos-app-1/logs?mode=raw").get_json()
+    msgs = " ".join(it["msg"] for it in d["items"])
+    assert "gunicorn booting worker" in msgs             # stdout (docker)
+    assert "/api/tickets" in msgs                        # access line (caddy)
 
 
 def test_container_metrics_from_victoria(client, monkeypatch):

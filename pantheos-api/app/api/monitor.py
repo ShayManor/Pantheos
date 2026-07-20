@@ -67,22 +67,27 @@ def container_metrics(cid):
     return jsonify(metrics.container_metrics(c))
 
 
-def _log_source(cid, inv):
-    """Which stored rows back this container's logs — mirrors _apply_real's split."""
-    if caddy_logs.available():
-        return "caddy" if inv and inv.get("hosts") else None
-    return "mock"
+def _log_sources(cid, inv):
+    """Which stored sources back this container's logs — mirrors _apply_real's split."""
+    if not caddy_logs.available():
+        return ["mock"]
+    if not inv:
+        return []                       # not in the monitoring inventory
+    srcs = ["docker"]                   # every inventory container serves its stdout
+    if inv.get("hosts"):
+        srcs.append("caddy")            # vhost containers also show HTTP access lines
+    return srcs
 
 
 @bp.get("/containers/<cid>/logs")
 def container_logs(cid):
     get_or_404(Container, cid)
-    src = _log_source(cid, entry(cid))
-    if src is None:
+    srcs = _log_sources(cid, entry(cid))
+    if not srcs:
         return jsonify({"items": [], "next": None, "monitored": False})
     before = request.args.get("before", type=int)
     limit = min(request.args.get("limit", default=200, type=int), 500)
-    q = db().query(LogLine).filter_by(container_id=cid, source=src)
+    q = db().query(LogLine).filter(LogLine.container_id == cid, LogLine.source.in_(srcs))
     if before is not None:
         q = q.filter(LogLine.id < before)
     rows = q.order_by(LogLine.id.desc()).limit(limit).all()
@@ -97,12 +102,12 @@ def container_logs(cid):
 @bp.get("/containers/<cid>/logs/range")
 def container_log_range(cid):
     get_or_404(Container, cid)
-    src = _log_source(cid, entry(cid))
-    if src is None:
+    srcs = _log_sources(cid, entry(cid))
+    if not srcs:
         return jsonify({"lines": []})
     lo = request.args.get("from", type=int)
     hi = request.args.get("to", type=int)
-    rows = (db().query(LogLine).filter_by(container_id=cid, source=src)
+    rows = (db().query(LogLine).filter(LogLine.container_id == cid, LogLine.source.in_(srcs))
             .filter(LogLine.id >= lo, LogLine.id <= hi)
             .order_by(LogLine.id.desc()).all())
     return jsonify({"lines": [logview.line(r) for r in rows]})

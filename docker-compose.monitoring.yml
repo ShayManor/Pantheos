@@ -130,5 +130,23 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Tails each container's own stdout/stderr from Docker's json-file driver into
+  # log_lines (source="docker"), so EVERY inventory container has real logs — not
+  # just the vhost-fronted ones (which caddy-log-ingest gives HTTP access lines).
+  # Reads /var/lib/docker read-only, the same mount cAdvisor uses; no docker sock.
+  docker-log-ingest:
+    image: ghcr.io/shaymanor/pantheos:latest
+    entrypoint: ["python", "-m", "app.docker_log_ingest"]
+    network_mode: host
+    environment:
+      PANTHEOS_DATABASE_URL: postgresql+psycopg://pantheos:pantheos@127.0.0.1:5432/pantheos
+      LOG_INGEST_INTERVAL: "5"
+    volumes:
+      - /var/lib/docker:/var/lib/docker:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   vmdata:
