@@ -5,6 +5,7 @@ from flask import Flask, abort, jsonify, send_from_directory
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
+from . import auth
 from .api import register_blueprints
 from .config import Config
 
@@ -33,6 +34,7 @@ def create_app(overrides=None):
     def health():
         return jsonify({"status": "ok"})
 
+    auth.install(app)
     register_blueprints(app)
 
     if app.config.get("RUN_DELPHI_WORKER"):  # pragma: no cover - server-only thread

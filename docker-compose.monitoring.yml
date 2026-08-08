@@ -55,6 +55,7 @@ services:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./monitoring/service-token:/etc/alertmanager/service-token:ro
     restart: unless-stopped
 
   node-exporter:

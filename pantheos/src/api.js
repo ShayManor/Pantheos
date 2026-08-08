@@ -1,11 +1,36 @@
+// Auth plumbing: auth.jsx installs a token getter and a 401 handler once
+// Firebase is up. With the gate off both stay null and requests go out bare.
+let getToken = null;
+let onAuthFailure = null;
+export const setTokenProvider = (fn) => { getToken = fn; };
+export const setOnAuthFailure = (fn) => { onAuthFailure = fn; };
+
+async function authHeaders() {
+  let t = null;
+  try {
+    t = getToken ? await getToken() : null;
+  } catch {
+    // A refresh that cannot complete (revoked session, hard network failure)
+    // is an auth failure: route it where a 401 goes, so the user lands back on
+    // sign-in instead of a screen of failing requests.
+    onAuthFailure?.();
+  }
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
 async function req(method, url, body) {
-  const opts = { method, headers: {} };
+  const opts = { method, headers: await authHeaders() };
   if (body !== undefined) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
   }
   const res = await fetch(url, opts);
-  if (!res.ok) throw new Error(`${method} ${url} → ${res.status}`);
+  if (res.status === 401) onAuthFailure?.();
+  if (!res.ok) {
+    const err = new Error(`${method} ${url} → ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
   const ct = res.headers.get("content-type") || "";
   return ct.includes("application/json") ? res.json() : res.text();
 }
@@ -60,9 +85,14 @@ export const api = {
     req("GET", `/api/containers/${id}/logs/range${qs({ from, to })}`),
   usage: () => req("GET", "/api/monitor/usage"),
   errseries: () => req("GET", "/api/monitor/errseries"),
+  authMe: () => req("GET", "/api/auth/me"),
 
   launch: (id) => req("POST", `/api/tickets/${id}/launch`),
-  ticketRunStream: async (id, h) => { await streamSSE(await fetch(`/api/tickets/${id}/run/stream`), h); },
+  ticketRunStream: async (id, h) => {
+    const res = await fetch(`/api/tickets/${id}/run/stream`, { headers: await authHeaders() });
+    if (res.status === 401) onAuthFailure?.();
+    await streamSSE(res, h);
+  },
   ticketRuns: (id) => req("GET", `/api/tickets/${id}/runs`),
   setLife: (id, life) => req("PATCH", `/api/tickets/${id}`, { life }),
   deleteTicket: (id) => req("DELETE", `/api/tickets/${id}`),

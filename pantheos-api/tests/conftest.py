@@ -33,3 +33,24 @@ def session(app):
     """A DB session inside an app context (for direct model tests)."""
     with app.app_context():
         yield app.db_session
+
+
+@pytest.fixture()
+def auth_app():
+    """An app with the Firebase gate switched on. The default `app` fixture
+    leaves it off so the rest of the suite is unaffected."""
+    application = create_app({
+        "DATABASE_URL": TEST_DB,
+        "FIREBASE_PROJECT_ID": "pantheos-8d962",
+        "FIREBASE_API_KEY": "test-api-key",
+        "FIREBASE_AUTH_DOMAIN": "pantheos-8d962.firebaseapp.com",
+        "ALLOWED_EMAILS": "shay.manor@gmail.com",
+        "SERVICE_TOKEN": "svc-secret",
+        "AUTH_DISABLED": False,
+    })
+    reset_db(application.db_engine)
+    seed(application.db_session)
+    application.db_session.remove()
+    yield application
+    application.db_session.remove()
+    application.db_engine.dispose()

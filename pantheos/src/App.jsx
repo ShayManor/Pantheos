@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import React from "react";
-import { Check, ChevronRight, Clock, Gauge, ListChecks, Radio, Satellite } from "lucide-react";
+import { Check, ChevronRight, Clock, Gauge, ListChecks, LogOut, Radio, Satellite } from "lucide-react";
 import { CSS } from "./styles.js";
 import { Nav } from "./nav.jsx";
+import { useAuth } from "./auth.jsx";
 import { pathForNode, nodeFromPath, stackFromPath } from "./lib/routes.js";
 import { api } from "./api.js";
 import QueueView from "./views/QueueView.jsx";
@@ -18,6 +19,7 @@ import NewTicketModal from "./components/NewTicketModal.jsx";
 import ContextEditor from "./components/ContextEditor.jsx";
 
 export default function Pantheos() {
+  const { user, signOut } = useAuth();
   const [ready, setReady] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [projects, setProjects] = useState({});
@@ -222,6 +224,11 @@ export default function Pantheos() {
               <button className="gs-kbtn" onClick={() => setSearchOpen(true)}>
                 <Radio size={13} />Search <kbd>⌘K</kbd>
               </button>
+              {user && (
+                <button className="gs-kbtn" onClick={signOut} title={user.email}>
+                  <LogOut size={13} />Sign out
+                </button>
+              )}
               <span className="gs-stat-chip" style={{ background: "var(--fault-soft)", color: "var(--fault)", cursor: "pointer" }}
                 onClick={() => go({ view: "monitor", containerId: firstFault })}>
                 <span className="dot flt" style={{ boxShadow: "none" }} />{cCount.flt} fault</span>

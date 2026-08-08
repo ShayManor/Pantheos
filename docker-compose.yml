@@ -47,6 +47,13 @@ services:
       # Real telemetry for the Pantheos (gs-platform) container in Monitor: the
       # Caddy access log, mounted read-only below. Absent => Monitor uses the mock.
       CADDY_ACCESS_LOG: /var/log/caddy/access.log
+      # Firebase auth gate. Unsetting FIREBASE_PROJECT_ID serves the app open,
+      # so this is also the one-variable rollback.
+      FIREBASE_PROJECT_ID: pantheos-8d962
+      FIREBASE_API_KEY: AIzaSyDy6w9vU7TB07NjP7OBNSq1wNTSW33T8hs
+      FIREBASE_AUTH_DOMAIN: pantheos-8d962.firebaseapp.com
+      PANTHEOS_ALLOWED_EMAILS: shay.manor@gmail.com
+      PANTHEOS_SERVICE_TOKEN: ${PANTHEOS_SERVICE_TOKEN:-}
     volumes:
       - ${HOME}/.ssh:/root/.ssh:ro   # key/config to reach the host's hermes over SSH
       - /var/log/caddy:/var/log/caddy:ro   # Caddy access log for the Monitor station

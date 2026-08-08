@@ -14,6 +14,12 @@ receivers:
     webhook_configs:
       - url: "http://127.0.0.1:8000/api/monitor/alerts"
         send_resolved: true
+        # Bearer credential for the Pantheos auth gate. deploy.sh writes this
+        # file from a repo secret; it is never committed.
+        http_config:
+          authorization:
+            type: Bearer
+            credentials_file: /etc/alertmanager/service-token
 
     # Email is the spec's guaranteed channel (§4.8) but is off by default — no
     # SMTP creds are wired. To enable, fill these in (or template them via a

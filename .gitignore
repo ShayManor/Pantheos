@@ -248,3 +248,6 @@ docs/spec.md
 
 # Frontend source dir wrongly caught by the Python-template "lib/" rule above.
 !pantheos/src/lib/
+
+# Alertmanager bearer credential for the auth gate, written at deploy time.
+monitoring/service-token

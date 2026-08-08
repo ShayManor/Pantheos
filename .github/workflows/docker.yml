@@ -71,6 +71,7 @@ jobs:
       - name: Pull + redeploy
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PANTHEOS_SERVICE_TOKEN: ${{ secrets.PANTHEOS_SERVICE_TOKEN }}
         run: |
           chmod +x ./deploy.sh
           ./deploy.sh
