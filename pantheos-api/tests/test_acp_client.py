@@ -13,7 +13,7 @@ def test_run_turn_selects_real_client(monkeypatch):
     monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
     called = {}
 
-    def fake(text, hsid, model=None, history=None):
+    def fake(text, hsid, model=None, history=None, auto_approve=True):
         called["args"] = (text, hsid, model)
         yield {"type": "done", "text": "ok", "reasoning": "",
                "tools": [], "hermes_session_id": "hs1"}
@@ -26,7 +26,7 @@ def test_run_turn_selects_real_client(monkeypatch):
 
 def test_run_turn_normalizes_events(monkeypatch):
     # Replace the async driver with one that emits through the same queue path.
-    def fake_drive(text, hsid, on_event):
+    def fake_drive(text, hsid, on_event, auto_approve=True):
         on_event({"type": "reasoning", "delta": "thinking"})
         on_event({"type": "text", "delta": "hello "})
         on_event({"type": "text", "delta": "world"})
@@ -41,7 +41,7 @@ def test_run_turn_normalizes_events(monkeypatch):
 
 
 def test_run_turn_reports_errors(monkeypatch):
-    def boom(text, hsid, on_event):
+    def boom(text, hsid, on_event, auto_approve=True):
         raise RuntimeError("ssh down")
     monkeypatch.setattr(acp_client, "_drive", boom)
     events = list(acp_client.run_turn("hi", "hs1"))
@@ -249,3 +249,49 @@ def test_mcp_servers_from_env(monkeypatch):
     assert len(cfgs) == 1
     assert cfgs[0]["name"] == "pantheos"
     assert cfgs[0]["url"] == "http://mac.tailnet:8001/mcp"
+
+
+def test_run_turn_forwards_auto_approve_to_real_client(monkeypatch):
+    monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
+    called = {}
+
+    def fake(text, hsid, model=None, history=None, auto_approve=True):
+        called["auto_approve"] = auto_approve
+        yield {"type": "done", "text": "ok", "reasoning": "",
+               "tools": [], "hermes_session_id": "hs1"}
+
+    monkeypatch.setattr("app.acp_client.run_turn", fake)
+    list(acp.run_turn("hello", None, auto_approve=False))
+    assert called["auto_approve"] is False
+
+
+def test_drive_async_rejects_permission_when_auto_approve_is_off(monkeypatch):
+    """A propose-ceiling run must decline tool calls instead of allowing them."""
+    from acp.client.router import build_client_router
+
+    chosen = {}
+
+    class FakeConn:
+        def __init__(self, bridge):
+            self._router = build_client_router(bridge, use_unstable_protocol=True)
+
+        async def initialize(self, **kw):
+            return None
+
+        async def new_session(self, **kw):
+            class R:
+                session_id = "hs-live"
+            return R()
+
+        async def prompt(self, session_id, prompt, **kw):
+            resp = await self._router("session/request_permission", {
+                "sessionId": session_id,
+                "toolCall": {"toolCallId": "1"},
+                "options": [{"optionId": "opt-allow", "name": "Allow", "kind": "allow_once"},
+                            {"optionId": "opt-reject", "name": "Reject", "kind": "reject_once"}]}, False)
+            chosen["option_id"] = resp.outcome.option_id
+
+    _install_fake_spawn(monkeypatch, FakeConn)
+    acp_client._drive("hi", None, lambda ev: None, False)
+
+    assert chosen["option_id"] == "opt-reject"

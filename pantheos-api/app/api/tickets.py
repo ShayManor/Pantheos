@@ -75,10 +75,8 @@ def get_ticket(tid):
 
 @bp.post("/tickets/<tid>/launch")
 def launch_ticket(tid):
-    # TODO: real agent execution is not yet implemented. This only flips the
-    # ticket to "executing" and returns a toast — nothing dispatches Delphi or
-    # runs the work. Wiring this to the agent (see mcp/tools.run_claude_code) is
-    # the remaining piece.
+    # Arms the ticket only; the run itself streams from /run/stream, which the
+    # client opens next.
     t = get_or_404(Ticket, tid)
     t.agent = "executing"
     if t.life == "backburner":
@@ -101,6 +99,10 @@ def ticket_run_stream(tid):
     title, area = t.title, t.area.name
     project = db().get(Project, t.project_key) if t.project_key else None
     autonomy = project.autonomy if project else None
+    ctx = {"summary": t.summary, "body": t.body,
+           "project_name": project.name if project else None,
+           "project_key": project.key if project else None,
+           "project_context": project.context if project else None}
 
     run = (db().query(AgentRun)
            .filter(AgentRun.ticket == tid, AgentRun.kind == "execute",
@@ -114,21 +116,31 @@ def ticket_run_stream(tid):
         db().commit()
     run_id = run.id
 
+    def fail():
+        """Release the ticket so the run can be retried, and drop the previous
+        run's banner: a failed run that leaves "shipped a fix" standing reads as
+        a success that never happened."""
+        db().get(AgentRun, run_id).status = "error"
+        tk = db().get(Ticket, tid)
+        tk.agent = "idle"
+        tk.report = tk.result = None
+        db().commit()
+
     def generate():
         final = None
         try:
-            for ev in run_ticket(tid, title, area, autonomy):
+            for ev in run_ticket(tid, title, area, autonomy, ctx):
                 if ev["type"] == "done":
                     final = ev
+                elif ev["type"] == "error":
+                    # The real backend reports transport failures as an event
+                    # rather than raising, but the run is over either way.
+                    fail()
                 yield f"event: {ev['type']}\ndata: {json.dumps(ev)}\n\n"
         except Exception as exc:  # surface run failures to the UI
             err = {"type": "error", "message": str(exc)}
             yield f"event: error\ndata: {json.dumps(err)}\n\n"
-            r = db().get(AgentRun, run_id)
-            r.status = "error"
-            tk = db().get(Ticket, tid)
-            tk.agent = "idle"
-            db().commit()
+            fail()
         if final is not None:
             r = db().get(AgentRun, run_id)
             r.reasoning = final["reasoning"]

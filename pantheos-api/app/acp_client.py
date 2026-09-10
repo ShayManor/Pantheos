@@ -30,7 +30,7 @@ def _mcp_servers():
 	return [{"name": "pantheos", "url": url, "type": "http", "headers": []}]
 
 
-def run_turn(text, hermes_session_id, model=None, history=None):  # model/history ignored: Hermes threads its own session
+def run_turn(text, hermes_session_id, model=None, history=None, auto_approve=True):  # model/history ignored: Hermes threads its own session
     """Yield normalized event dicts for one user turn."""
     q = queue.Queue()
 
@@ -39,7 +39,7 @@ def run_turn(text, hermes_session_id, model=None, history=None):  # model/histor
 
     def worker():
         try:
-            _drive(text, hermes_session_id, on_event)
+            _drive(text, hermes_session_id, on_event, auto_approve)
         except Exception as exc:  # transport / spawn / protocol failure
             q.put({"type": "error", "message": str(exc)})
         finally:
@@ -53,12 +53,12 @@ def run_turn(text, hermes_session_id, model=None, history=None):  # model/histor
         yield ev
 
 
-def _drive(text, hermes_session_id, on_event):
+def _drive(text, hermes_session_id, on_event, auto_approve=True):
     """Blocking: run the async ACP turn to completion, calling on_event per event."""
-    asyncio.run(_drive_async(text, hermes_session_id, on_event))
+    asyncio.run(_drive_async(text, hermes_session_id, on_event, auto_approve))
 
 
-async def _drive_async(text, hermes_session_id, on_event):
+async def _drive_async(text, hermes_session_id, on_event, auto_approve=True):
     import acp
     from acp.schema import (AgentMessageChunk, AgentThoughtChunk,
                             AllowedOutcome, RequestPermissionResponse,
@@ -101,8 +101,11 @@ async def _drive_async(text, hermes_session_id, on_event):
                               "title": getattr(update, "title", name)})
 
         async def request_permission(self, session_id, tool_call, options, **kwargs):
-            # Full-autonomy: auto-approve. Prefer an allow-once option.
-            chosen = next((o for o in options if "allow" in (o.kind or "").lower()), options[0])
+            # Prefer an allow-once option; under a propose ceiling the caller
+            # passes auto_approve=False and we reject instead, so the ticket run
+            # cannot write past what the project permits.
+            want = "allow" if auto_approve else "reject"
+            chosen = next((o for o in options if want in (o.kind or "").lower()), options[0])
             return RequestPermissionResponse(
                 outcome=AllowedOutcome(outcome="selected", option_id=chosen.option_id))
 

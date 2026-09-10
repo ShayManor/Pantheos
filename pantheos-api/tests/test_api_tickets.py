@@ -197,3 +197,194 @@ def test_ticket_run_stream_surfaces_errors(client, app, monkeypatch):
                .order_by(AgentRun.position.desc()).first())
         assert run is not None
         assert run.status == "error"
+
+
+def _fake_turn(output, reasoning="checked the container logs", tools=("terminal",),
+               capture=None):
+    """Build a stand-in for acp.run_turn that replays one real-shaped ACP turn."""
+    def run_turn(text, hermes_session_id, model=None, history=None, auto_approve=True):
+        if capture is not None:
+            capture["text"] = text
+            capture["auto_approve"] = auto_approve
+        yield {"type": "reasoning", "delta": reasoning}
+        for name in tools:
+            yield {"type": "tool", "id": name, "name": name, "status": "done", "title": name}
+        yield {"type": "text", "delta": output}
+        yield {"type": "done", "text": output, "reasoning": reasoning,
+               "tools": list(tools), "hermes_session_id": "sess-1"}
+    return run_turn
+
+
+def test_ticket_run_stream_acp_mode_persists_agent_result(client, app, monkeypatch):
+    monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
+    output = ("Pulled the container logs and found the unhandled 429.\n\n"
+              "RESULT: Rate-limit path now raises instead of storing 0.\n"
+              "REPORT: The fetcher swallowed GitHub 429s and wrote 0 stars; it now "
+              "raises GitHubTransientError and the cron retries.")
+    monkeypatch.setattr("app.acp.run_turn", _fake_turn(output))
+
+    body = client.get("/api/tickets/GHS-0311/run/stream").get_data(as_text=True)
+    assert "event: done" in body
+
+    from app.models import AgentRun, Ticket
+    with app.app_context():
+        s = app.db_session
+        t = s.get(Ticket, "GHS-0311")
+        assert t.result == "Rate-limit path now raises instead of storing 0."
+        assert t.report == ("The fetcher swallowed GitHub 429s and wrote 0 stars; it now "
+                            "raises GitHubTransientError and the cron retries.")
+        assert t.agent == "needs_review"
+        run = (s.query(AgentRun)
+               .filter(AgentRun.ticket == "GHS-0311", AgentRun.kind == "execute")
+               .order_by(AgentRun.position.desc()).first())
+        assert run.status == "done"
+        assert run.output == output
+        assert run.tools == ["terminal"]
+        assert run.cost == "—"
+
+
+def test_ticket_run_stream_acp_mode_falls_back_when_agent_skips_markers(client, app, monkeypatch):
+    monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
+    output = ("Could not reproduce the 500 locally.\nThe container is healthy.\n\n"
+              "Next step is to tail the edge logs during a live spike.")
+    monkeypatch.setattr("app.acp.run_turn", _fake_turn(output))
+
+    client.get("/api/tickets/GHS-0311/run/stream").get_data(as_text=True)
+
+    from app.models import Ticket
+    with app.app_context():
+        t = app.db_session.get(Ticket, "GHS-0311")
+        assert t.result == "Could not reproduce the 500 locally."
+        assert t.report == ("Could not reproduce the 500 locally.\n"
+                            "The container is healthy.")
+
+
+def test_ticket_run_stream_acp_mode_keeps_wrapped_report_paragraph(client, app, monkeypatch):
+    monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
+    output = ("RESULT: Pinned the fetcher to the retrying client.\n"
+              "REPORT: The 429 path stored 0 stars for every user in the batch.\n"
+              "Pinning the retrying client keeps the previous value until the\n"
+              "window resets.")
+    monkeypatch.setattr("app.acp.run_turn", _fake_turn(output))
+
+    client.get("/api/tickets/GHS-0311/run/stream").get_data(as_text=True)
+
+    from app.models import Ticket
+    with app.app_context():
+        t = app.db_session.get(Ticket, "GHS-0311")
+        assert t.result == "Pinned the fetcher to the retrying client."
+        assert t.report == ("The 429 path stored 0 stars for every user in the batch.\n"
+                            "Pinning the retrying client keeps the previous value until the\n"
+                            "window resets.")
+
+
+def test_ticket_run_stream_acp_mode_prompt_carries_project_spec(client, app, monkeypatch):
+    monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
+    seen = {}
+    monkeypatch.setattr("app.acp.run_turn", _fake_turn("RESULT: done\nREPORT: done", capture=seen))
+
+    from app.models import Project, Ticket
+    with app.app_context():
+        s = app.db_session
+        ticket = s.get(Ticket, "GHS-0311")
+        project = s.get(Project, ticket.project_key)
+        summary, body = ticket.summary, ticket.body
+        pname, pkey, pcontext, autonomy = (project.name, project.key,
+                                           project.context, project.autonomy)
+
+    client.get("/api/tickets/GHS-0311/run/stream").get_data(as_text=True)
+
+    prompt = seen["text"]
+    assert "GHS-0311" in prompt
+    assert f"{pname} ({pkey})" in prompt
+    assert pcontext in prompt
+    assert f"Autonomy ceiling: {autonomy}" in prompt
+    assert summary in prompt
+    assert body in prompt
+
+
+def test_ticket_run_stream_propose_ceiling_withholds_auto_approval(client, monkeypatch):
+    monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
+    seen = {}
+    monkeypatch.setattr("app.acp.run_turn", _fake_turn("RESULT: x\nREPORT: y", capture=seen))
+
+    client.get("/api/tickets/EVC-0074/run/stream").get_data(as_text=True)   # evc → propose
+
+    assert seen["auto_approve"] is False
+
+
+def test_ticket_run_stream_full_ceiling_auto_approves(client, monkeypatch):
+    monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
+    seen = {}
+    monkeypatch.setattr("app.acp.run_turn", _fake_turn("RESULT: x\nREPORT: y", capture=seen))
+
+    client.get("/api/tickets/GHS-0311/run/stream").get_data(as_text=True)   # ghstats → full
+
+    assert seen["auto_approve"] is True
+
+
+def test_ticket_run_stream_error_clears_stale_result_banner(client, app, monkeypatch):
+    """A failed run must not leave the previous run's success banner standing."""
+    import app.api.tickets as tickets_api
+    from app.models import Ticket
+
+    with app.app_context():
+        assert app.db_session.get(Ticket, "GRD-0182").result   # seeded banner
+
+    def boom(*a, **k):
+        raise RuntimeError("hermes unreachable")
+        yield  # pragma: no cover  (make it a generator)
+
+    monkeypatch.setattr(tickets_api, "run_ticket", boom)
+    client.get("/api/tickets/GRD-0182/run/stream").get_data(as_text=True)
+
+    with app.app_context():
+        t = app.db_session.get(Ticket, "GRD-0182")
+        assert t.result is None
+        assert t.report is None
+
+
+def test_ticket_run_stream_acp_error_event_releases_the_ticket(client, app, monkeypatch):
+    """acp_client reports transport failures as an `error` event rather than
+    raising, so the stream must still unstick the ticket: left 'executing', the
+    Launch button stays disabled and the run can never be retried."""
+    monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
+
+    def failing_turn(text, hsid, model=None, history=None, auto_approve=True):
+        yield {"type": "reasoning", "delta": "connecting"}
+        yield {"type": "error", "message": "ssh down"}
+
+    monkeypatch.setattr("app.acp.run_turn", failing_turn)
+
+    client.post("/api/tickets/GRD-0182/launch")          # arms it: agent -> executing
+    body = client.get("/api/tickets/GRD-0182/run/stream").get_data(as_text=True)
+    assert "event: error" in body
+
+    from app.models import AgentRun, Ticket
+    with app.app_context():
+        s = app.db_session
+        t = s.get(Ticket, "GRD-0182")
+        assert t.agent == "idle"
+        assert t.result is None and t.report is None
+        run = (s.query(AgentRun)
+               .filter(AgentRun.ticket == "GRD-0182", AgentRun.kind == "execute")
+               .order_by(AgentRun.position.desc()).first())
+        assert run.status == "error"
+
+
+def test_ticket_run_stream_unknown_ceiling_withholds_auto_approval(client, app, monkeypatch):
+    """A ticket with no project has no declared ceiling, so the run must fail
+    closed the way the mock's 'propose / unknown' branch already does."""
+    monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
+    seen = {}
+    monkeypatch.setattr("app.acp.run_turn", _fake_turn("RESULT: x\nREPORT: y", capture=seen))
+
+    from app.models import Ticket
+    with app.app_context():
+        s = app.db_session
+        s.get(Ticket, "GRD-0182").project_key = None
+        s.commit()
+
+    client.get("/api/tickets/GRD-0182/run/stream").get_data(as_text=True)
+
+    assert seen["auto_approve"] is False
