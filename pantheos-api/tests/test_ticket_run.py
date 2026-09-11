@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 
 from app import ticket_run
@@ -206,49 +207,48 @@ def test_prompt_marks_a_fleet_it_could_not_refresh():
     assert "## Fleet (live)" not in stale and "not refreshed" in stale
 
 
-def _with_fake_gh(tmp_path, script):
-    gh = tmp_path / "gh"
-    gh.write_text(script)
-    gh.chmod(0o755)
-    import os as _os
-    return {**_os.environ, "PATH": f"{tmp_path}:{_os.environ['PATH']}"}
+def _run_probe(tmp_path, **fakes):
+    """Run the probe script with PATH holding only the stand-ins a test supplies.
+
+    Inheriting the real PATH made the outcome depend on what the host happened
+    to have installed: CI runners ship gh in /usr/bin, so an "absent" case
+    passed locally and failed there.
+    """
+    for name, body in fakes.items():
+        f = tmp_path / name
+        f.write_text(body)
+        f.chmod(0o755)
+    # `head` is the one external binary the script itself pipes through.
+    (tmp_path / "head").symlink_to(shutil.which("head"))
+    return subprocess.run([shutil.which("bash"), "-c", ticket_run._PROBE],
+                          env={"PATH": str(tmp_path)},
+                          capture_output=True, text=True).stdout
 
 
 def test_probe_calls_a_dead_gh_token_invalid(tmp_path):
     """`gh auth status` exits 0 with an unusable token, so an exit-code check
     reports a credential the run does not actually have."""
-    env = _with_fake_gh(tmp_path, "#!/bin/sh\n"
-                        "echo 'X Failed to log in to github.com account ShayManor'\n"
-                        "exit 0\n")
-    out = subprocess.run(["bash", "-c", ticket_run._PROBE], env=env,
-                         capture_output=True, text=True).stdout
+    out = _run_probe(tmp_path, gh="#!/bin/sh\n"
+                     "echo 'X Failed to log in to github.com account ShayManor'\n"
+                     "exit 0\n")
     assert "gh auth: INVALID" in out
 
 
 def test_probe_calls_a_live_gh_token_ok(tmp_path):
-    env = _with_fake_gh(tmp_path, "#!/bin/sh\necho 'Logged in to github.com'\n")
-    out = subprocess.run(["bash", "-c", ticket_run._PROBE], env=env,
-                         capture_output=True, text=True).stdout
+    out = _run_probe(tmp_path, gh="#!/bin/sh\necho 'Logged in to github.com'\n")
     assert "gh auth: ok" in out
 
 
 def test_probe_says_so_when_gh_is_absent(tmp_path):
     """No gh at all is a different answer from a bad credential, and it changes
     what the run should try next."""
-    out = subprocess.run(["bash", "-c", ticket_run._PROBE],
-                         env={"PATH": "/bin:/usr/bin"},  # has bash, has no gh
-                         capture_output=True, text=True).stdout
-    assert "gh auth: no gh binary" in out
+    assert "gh auth: no gh binary" in _run_probe(tmp_path)
 
 
 def test_probe_reports_container_uptime(tmp_path):
     """restarts=N says a container is looping. Uptime says whether a restart was
     a deploy a minute ago or a crash loop, which is the distinction a run needs
     before it decides the alert is its own fault."""
-    docker = tmp_path / "docker"
-    docker.write_text("#!/bin/sh\necho 'pantheos-mcp-1  Restarting (1) 56 seconds ago'\n")
-    docker.chmod(0o755)
-    out = subprocess.run(["bash", "-c", ticket_run._PROBE],
-                         env={"PATH": f"{tmp_path}:/bin:/usr/bin"},
-                         capture_output=True, text=True).stdout
+    out = _run_probe(tmp_path, docker="#!/bin/sh\n"
+                     "echo 'pantheos-mcp-1  Restarting (1) 56 seconds ago'\n")
     assert "pantheos-mcp-1" in out and "Restarting" in out
