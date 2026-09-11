@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { initializeApp } from "firebase/app";
-import { GoogleAuthProvider, getAuth, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { GoogleAuthProvider, getAuth, getRedirectResult, onAuthStateChanged, signInWithRedirect, signOut } from "firebase/auth";
 import { api, setOnAuthFailure, setTokenProvider } from "./api.js";
 import LoginView from "./views/LoginView.jsx";
 
@@ -42,6 +42,10 @@ export function AuthProvider({ children }) {
     }
     setTokenProvider(() => fbAuth.currentUser?.getIdToken() ?? null);
     setOnAuthFailure(() => signOut(fbAuth));
+    // Coming back from Google, the credential is already applied to fbAuth and
+    // onAuthStateChanged reports it. This only surfaces a failure that happened
+    // while the page was away.
+    getRedirectResult(fbAuth).catch((e) => setError(e.code || "sign-in failed"));
     return onAuthStateChanged(fbAuth, (u) => { setUser(u); setAccess(null); });
   }, [cfg]);
 
@@ -75,7 +79,10 @@ export function AuthProvider({ children }) {
         error={error}
         onSignIn={() => {
           setError(null);
-          signInWithPopup(fbAuth, new GoogleAuthProvider())
+          // Redirect, not a popup: Google's sign-in page sets COOP, which severs
+          // the popup handle, and Firebase then reads it as closed and cancels
+          // the sign-in even though the credential arrived.
+          signInWithRedirect(fbAuth, new GoogleAuthProvider())
             .catch((e) => setError(e.code || "sign-in failed"));
         }}
       />

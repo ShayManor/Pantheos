@@ -51,7 +51,9 @@ services:
       # so this is also the one-variable rollback.
       FIREBASE_PROJECT_ID: pantheos-8d962
       FIREBASE_API_KEY: AIzaSyDy6w9vU7TB07NjP7OBNSq1wNTSW33T8hs
-      FIREBASE_AUTH_DOMAIN: pantheos-8d962.firebaseapp.com
+      # Caddy proxies /__/auth/* to the project's firebaseapp.com helper, so the
+      # sign-in popup shares this origin and can hand the credential back.
+      FIREBASE_AUTH_DOMAIN: pantheos.app
       PANTHEOS_ALLOWED_EMAILS: shay.manor@gmail.com
       PANTHEOS_SERVICE_TOKEN: ${PANTHEOS_SERVICE_TOKEN:-}
     volumes:
