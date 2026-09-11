@@ -8,6 +8,8 @@ gate stays green; any other mode drives the real agent through app.acp.run_turn.
 """
 import os
 import re
+import shlex
+import subprocess
 
 # Keyword family -> (tool keys, a short action phrase). Tool keys must exist in
 # the frontend TOOLMAP so the chips render.
@@ -90,7 +92,7 @@ def _run_real(tid, title, area, autonomy, ctx):
     """
     from . import acp                      # imported lazily, mirroring app.acp
 
-    prompt = _prompt(tid, title, area, autonomy, ctx)
+    prompt = _prompt(tid, title, area, autonomy, {**ctx, "runtime": _runtime(ctx)})
     # The ceiling is a real gate, not just prompt text. It fails closed: only an
     # explicit auto_pr/full ceiling auto-approves a tool call, so propose — and a
     # ticket with no project, which declares no ceiling at all — does not.
@@ -104,20 +106,133 @@ def _run_real(tid, title, area, autonomy, ctx):
             yield ev
 
 
+# What each ceiling permits, in operational terms. A run stalled on "am I allowed
+# to commit to main?" because the old gloss named the permission without naming
+# its consequence. Unknown/None falls back to the most restrictive entry, the
+# same way the auto_approve gate in _run_real fails closed.
+_CEILINGS = {
+    "propose": "Plan and open a PR only, then stop for review. Do not push to main.",
+    "auto_pr": "Open a PR and self-merge it once CI is green. Do not push to main "
+               "directly.",
+    "full": "You may commit straight to main. On a deployed project a push to main "
+            "triggers a production deploy, so treat every push as a deploy.",
+}
+_NEVER = ("Never force-push, rewrite history, read or relocate secrets, drop or "
+          "truncate data, or delete a container or volume.")
+
+# Ticket source -> the skill that already describes how to work it. The skills
+# are good and nothing routed to them, so a monitor ticket arrived with no method.
+_SKILLS = {"monitor": "debug-issue", "alert": "debug-issue"}
+
+_PROBE = (
+    "for b in git gh claude docker psql; do command -v $b >/dev/null 2>&1 "
+    "&& printf '%s ' \"$b\"; done; echo '<- on PATH'; "
+    # `gh auth status` exits 0 on a dead token, so read what it prints rather
+    # than what it returns. A credential wrongly called good is worse than no
+    # answer: the run plans around a push it cannot make.
+    "if command -v gh >/dev/null 2>&1; then case \"$(gh auth status 2>&1)\" in "
+    "*'Failed to log in'*|*'not logged in'*|*invalid*) "
+    "echo 'gh auth: INVALID (cannot clone, push or open a PR)';; "
+    "*) echo 'gh auth: ok';; esac; "
+    "else echo 'gh auth: no gh binary'; fi; "
+    # Uptime separates a container recreated by a deploy from one in a crash
+    # loop. Both show a raised restart count; only one is the fault.
+    "if command -v docker >/dev/null 2>&1; then echo 'containers:'; "
+    "docker ps --format '{{.Names}}  {{.Status}}' 2>/dev/null | head -40; fi")
+
+
+def _ssh_argv():
+    """The ssh argv app.acp_client uses, minus its remote command.
+
+    Reusing the configured transport puts the probe on the same flags, identity
+    and destination as the ACP session, so the two cannot disagree about whether
+    the host is reachable.
+    """
+    from .acp_client import _DEFAULT_ACP_CMD
+
+    argv = shlex.split(os.environ.get("DELPHI_ACP_CMD", _DEFAULT_ACP_CMD))
+    return argv[:-1] if len(argv) >= 3 and argv[0] == "ssh" else None
+
+
+def _probe(argv, workspace):
+    """Ask the agent host what it actually has. None when it cannot be asked.
+
+    One ssh answers which binaries exist, whether gh holds a usable credential
+    and whether there is a workspace to edit in. Left to the agent, each of those
+    costs a turn, and a run can spend its whole budget discovering it has no
+    checkout and no credential.
+    """
+    if not argv:
+        return None
+    script = (_PROBE + f"; [ -d {shlex.quote(workspace)} ] && echo 'workspace: present'"
+              " || echo 'workspace: MISSING (nothing to edit or commit from)'")
+    try:
+        proc = subprocess.run(
+            argv + ["bash -lc " + shlex.quote(script)], capture_output=True, text=True,
+            timeout=float(os.environ.get("DELPHI_PROBE_TIMEOUT", "15")), check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return proc.stdout.strip() or None
+
+
+def _runtime(ctx):
+    """The handles a run needs before it can act: host, workspace, tools, MCP."""
+    from .mcp.tools import _workspace_for
+
+    argv = _ssh_argv()
+    key = ctx.get("project_key")
+    workspace = _workspace_for(key) if key else "(no project, no workspace)"
+    lines = [f"agent host: {argv[-1]}"] if argv else []
+    lines += [f"workspace: {workspace}",
+              f"pantheos MCP: {os.environ.get('PANTHEOS_MCP_URL') or 'not configured'}",
+              _probe(argv, workspace) or
+              "host probe unavailable: confirm tooling yourself before relying on it"]
+    return "\n".join(lines)
+
+
+def _fleet(containers):
+    """One line per container, so a crash loop is readable without a query."""
+    return "\n".join(
+        f"{c.get('id')}  role={c.get('role')}  status={c.get('status')}  "
+        f"restarts={c.get('restarts')}  err={c.get('err')}  p95={c.get('p95')}  "
+        f"image={c.get('image')}"
+        for c in containers)
+
+
 def _prompt(tid, title, area, autonomy, ctx):
-    """Ground the turn the way mcp.tools.run_claude_code does: project spec first,
-    autonomy ceiling as a hard gate, then the ticket."""
+    """Ground the turn with what the run would otherwise rediscover by hand."""
     name, key = ctx.get("project_name"), ctx.get("project_key")
     where = f"project {name} ({key}), area {area}" if name else f"area {area}"
     lines = [f"You are Delphi working ticket {tid} in {where}.", ""]
     if ctx.get("project_context"):
         lines += ["Read and obey this project spec before acting:",
                   ctx["project_context"], ""]
-    lines += [f"Autonomy ceiling: {autonomy}",
-              "(propose = plan and PR only, stop for review; auto_pr = PR plus "
-              "green-CI self-merge; full = may commit to main.)", "",
-              f"Ticket: {title}"]
-    lines += [v for v in (ctx.get("summary"), ctx.get("body")) if v]
+    # get_project_spec is the documented grounding call, but it answers over the
+    # MCP server, which is the thing most likely to be down on an infra ticket.
+    # Inlining its remaining fields keeps a run grounded with no tools at all.
+    lines += [f"{label}: {v}" for label, v in
+              (("Repo", ctx.get("project_repo")),
+               ("Project status", ctx.get("project_status"))) if v]
+    if ctx.get("area_context"):
+        lines += ["", "Area context:", ctx["area_context"]]
+    if ctx.get("containers"):
+        # Say whether these numbers were refreshed. Seeded values read as a
+        # healthy fleet, which is the worst thing to assert during an outage.
+        head = ("## Fleet (live)" if ctx.get("fleet_live")
+                else "## Fleet (not refreshed, metrics store unreachable)")
+        lines += ["", head, _fleet(ctx["containers"])]
+    if ctx.get("runtime"):
+        lines += ["", "## Runtime", ctx["runtime"]]
+    lines += ["", f"## Autonomy ceiling: {autonomy}",
+              _CEILINGS.get(autonomy, _CEILINGS["propose"]), _NEVER]
+    skill = _SKILLS.get(ctx.get("source"))
+    if skill:
+        lines += ["", f"Follow the {skill} skill: take evidence from a tool call "
+                  "before proposing any fix."]
+    lines += ["", f"Ticket: {title}"]
+    # An alert ticket sets summary = title; print it once.
+    lines += [v for v in (ctx.get("summary"), ctx.get("body"))
+              if v and v != title]
     lines += ["", "Work the ticket. Close with one line starting 'RESULT:' stating "
               "what actually changed, then one paragraph starting 'REPORT:'."]
     return "\n".join(lines)

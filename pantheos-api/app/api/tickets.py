@@ -5,8 +5,9 @@ from flask import Blueprint, Response, jsonify, request, stream_with_context
 from sqlalchemy import func
 
 from . import db, get_or_404
-from .. import scoring
-from ..models import AgentRun, Area, Project, Ticket
+from .monitor import serialize_live
+from .. import scoring, victoria
+from ..models import AgentRun, Area, Container, Project, Ticket
 from ..ticket_run import run_ticket
 
 bp = Blueprint("tickets", __name__, url_prefix="/api")
@@ -99,10 +100,20 @@ def ticket_run_stream(tid):
     title, area = t.title, t.area.name
     project = db().get(Project, t.project_key) if t.project_key else None
     autonomy = project.autonomy if project else None
-    ctx = {"summary": t.summary, "body": t.body,
+    # Everything the prompt would otherwise make the agent go and find: the rest
+    # of the project spec, the owning area, where the ticket came from, and the
+    # project's fleet with live metrics.
+    containers = serialize_live(
+        db().query(Container).filter(Container.project_key == t.project_key)
+        .order_by(Container.position).all()) if t.project_key else []
+    ctx = {"summary": t.summary, "body": t.body, "source": t.source,
            "project_name": project.name if project else None,
            "project_key": project.key if project else None,
-           "project_context": project.context if project else None}
+           "project_context": project.context if project else None,
+           "project_repo": project.repo if project else None,
+           "project_status": project.status if project else None,
+           "area_context": t.area.context, "containers": containers,
+           "fleet_live": victoria.available()}
 
     run = (db().query(AgentRun)
            .filter(AgentRun.ticket == tid, AgentRun.kind == "execute",

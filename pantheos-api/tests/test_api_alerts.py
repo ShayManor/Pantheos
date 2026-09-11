@@ -28,6 +28,29 @@ def test_firing_creates_p0_ticket(client):
     assert "route: /api/stats" in t["body"] and "restarts: 4" in t["body"]
 
 
+def test_firing_ticket_body_carries_the_whole_alert(client):
+    """Delphi reads the ticket body, so the alert's own query, start time and
+    labels have to survive the webhook instead of being rebuilt by hand."""
+    payload = {"alerts": [{
+        "status": "firing", "fingerprint": "abc123def456",
+        "labels": {"alertname": "HighErrorRate", "project": "groundstation",
+                   "severity": "critical", "site": "pantheos.app",
+                   "container": "pantheos-mcp-1"},
+        "annotations": {"summary": "pantheos.app 5xx rate above 5%",
+                        "description": "over 5% for 2m",
+                        "runbook_url": "https://example.test/runbook"},
+        "startsAt": "2026-09-11T14:49:00Z",
+        "generatorURL": "http://vmalert:8880/vmalert/alert?expr=err_ratio",
+    }]}
+    client.post("/api/monitor/alerts", json=payload)
+    body = _ticket(client, "ALR-ABC123DEF4")["body"]
+    assert "site: pantheos.app" in body          # a label the fixed list dropped
+    assert "container: pantheos-mcp-1" in body   # names the culprit outright
+    assert "started: 2026-09-11T14:49:00Z" in body
+    assert "vmalert:8880" in body                # the query behind the alert
+    assert "https://example.test/runbook" in body
+
+
 def test_refire_is_deduped(client):
     _fire(client)
     r = _fire(client)  # same fingerprint

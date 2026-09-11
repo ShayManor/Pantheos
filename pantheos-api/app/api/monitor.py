@@ -36,17 +36,24 @@ def list_hosts():
     return jsonify({h.id: h.to_dict() for h in rows})
 
 
-@bp.get("/containers")
-def list_containers():
-    rows = db().query(Container).order_by(Container.position).all()
+def serialize_live(rows):
+    """Serialize containers with the live VM overlay applied.
+
+    Shared with the ticket run prompt, so a run reads the same numbers the
+    Monitor station shows rather than the seeded ones.
+    """
     out = [c.to_dict() for c in rows]
     if victoria.available():
-        by_id = {c.id: c for c in rows}
         for d in out:
             inv = entry(d["id"])
             if inv:
                 _apply_real(d, inv)
-    return jsonify(out)
+    return out
+
+
+@bp.get("/containers")
+def list_containers():
+    return jsonify(serialize_live(db().query(Container).order_by(Container.position).all()))
 
 
 @bp.get("/containers/<cid>/metrics")
@@ -145,7 +152,6 @@ def alerts_webhook():
     payload = request.get_json(silent=True) or {}
     created, archived = [], []
     for alert in payload.get("alerts", []):
-        labels = alert.get("labels", {})
         fp = alert.get("fingerprint") or ""
         tid = f"ALR-{fp[:10].upper()}" if fp else None
         if not tid:
@@ -158,23 +164,28 @@ def alerts_webhook():
             continue
         if existing:
             continue  # already open — dedupe
-        _create_alert_ticket(tid, labels, alert.get("annotations", {}))
+        _create_alert_ticket(tid, alert)
         created.append(tid)
     db().commit()
     return jsonify({"created": created, "archived": archived})
 
 
-def _create_alert_ticket(tid, labels, annotations):
+def _create_alert_ticket(tid, alert):
+    labels, annotations = alert.get("labels", {}), alert.get("annotations", {})
     project = db().get(Project, labels.get("project")) if labels.get("project") else None
     if project is not None:
         area_id = project.area_id
     else:
         area_id = db().query(Area.id).order_by(Area.position).limit(1).scalar()
     title = annotations.get("summary") or labels.get("alertname") or "monitoring alert"
-    detail = [f"{k}: {v}" for k, v in (
-        ("rule", labels.get("alertname")), ("host", labels.get("host")),
-        ("route", labels.get("route")), ("restarts", labels.get("restarts")),
-        ("severity", labels.get("severity"))) if v]
+    # Every label, plus when it started and the query behind it. A run prompt is
+    # built from this body, so a dropped field is one Delphi has to rediscover.
+    detail = [f"rule: {labels['alertname']}"] if labels.get("alertname") else []
+    detail += [f"{k}: {v}" for k, v in sorted(labels.items())
+               if k != "alertname" and v]
+    detail += [f"{k}: {v}" for k, v in (
+        ("started", alert.get("startsAt")), ("query", alert.get("generatorURL")),
+        ("runbook", annotations.get("runbook_url"))) if v]
     body = annotations.get("description") or title
     if detail:
         body = body + "\n\n" + "\n".join(detail)

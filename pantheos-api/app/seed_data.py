@@ -96,6 +96,15 @@ PROJECTS = [
          "Deploys to the minipc via a self-hosted runner: docker.yml builds/pushes to GHCR, deploy.sh pulls and recreates the stack in ~/pantheos.",
          "Traffic path: cloudflared -> Caddy:8080 -> backends. Monitoring overlay is VictoriaMetrics + vmagent + vmalert + Alertmanager + cAdvisor + node/blackbox exporters.",
          "Alerts fire on pantheos_caddy_err_ratio > 0.05, probe_success == 0, container crash-looping and low host disk.",
+     ],
+     "ops": [
+         "Tests: `cd pantheos-api && source venv/bin/activate && python -m pytest` (pytest.ini gates 100% line coverage). E2E: `cd pantheos && npx playwright test`; the non-flaky gate is `bash scripts/e2e-loop.sh 20`.",
+         "Host: `ssh minipc`. The remote shell is non-interactive, so wrap remote commands as ssh minipc \"bash -lc '<cmd>'\" or PATH lookups fail.",
+         "Fleet on minipc: pantheos-app-1 (Flask + built SPA), pantheos-db-1 (Postgres), pantheos-mcp-1 (MCP server on :8001), pantheos-caddy-log-exporter-1, pantheos-caddy-log-ingest-1, pantheos-docker-log-ingest-1.",
+         "Monitoring overlay containers: pantheos-victoriametrics-1, -vmagent-1, -vmalert-1, -alertmanager-1, -cadvisor-1, -node-exporter-1, -blackbox-exporter-1.",
+         "Compose lives in ~/pantheos (docker-compose.yml plus docker-compose.monitoring.yml, hand-maintained copies). ~/pantheos-src is an unpacked source snapshot with no .git, so it is not a workspace you can commit from.",
+         "Deploy: push to main runs .github/workflows/docker.yml, which builds and pushes ghcr.io/shaymanor/pantheos; deploy.sh then pulls and recreates app, db and mcp only. The monitoring overlay is applied by hand and CI never touches it.",
+         "Verify a fix: watch the docker.yml run, then `curl -s https://pantheos.app/api/health` (public, returns {\"status\": \"ok\"}), then confirm restart counts stop climbing via `ssh minipc docker ps`.",
      ]},
 ]
 

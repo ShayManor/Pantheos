@@ -15,11 +15,17 @@ _CEILINGS = {
 
 
 def _project_context(p):
+    # ``ops`` is optional and holds verified commands, not description: the host,
+    # the test invocation, the fleet by container name, how to confirm a deploy.
+    # A project without checked facts renders no Ops heading, so the agent reads
+    # an absence instead of a guess.
+    ops = "".join(f"- {o}\n" for o in p.get("ops", ()))
     return (
         f"# {p['name']}\n\n{p['blurb']}\n\n"
         f"## Autonomy\n{p['autonomy']} — {_CEILINGS[p['autonomy']]}\n\n"
         f"## Repo\n{p['repo'] or '—'}\n\n"
         f"## Notes\n" + "".join(f"- {n}\n" for n in p["notes"])
+        + (f"\n## Ops\n{ops}" if ops else "")
     )
 
 

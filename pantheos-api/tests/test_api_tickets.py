@@ -388,3 +388,57 @@ def test_ticket_run_stream_unknown_ceiling_withholds_auto_approval(client, app, 
     client.get("/api/tickets/GRD-0182/run/stream").get_data(as_text=True)
 
     assert seen["auto_approve"] is False
+
+
+def test_ticket_run_stream_prompt_carries_spec_fleet_and_runtime(client, app, monkeypatch):
+    """ctx is assembled in the API layer, so a field missing here is a field the
+    agent has to spend a turn rediscovering with a tool call."""
+    monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
+    monkeypatch.setattr("app.ticket_run._probe", lambda argv, ws: "gh auth: ok")
+    seen = {}
+    monkeypatch.setattr("app.acp.run_turn",
+                        _fake_turn("RESULT: x\nREPORT: y", capture=seen))
+
+    from app.models import Container, Project, Ticket
+    with app.app_context():
+        s = app.db_session
+        t = s.get(Ticket, "GHS-0311")
+        project = s.get(Project, t.project_key)
+        repo, status, area_ctx = project.repo, project.status, project.area.context
+        cids = [c.id for c in s.query(Container)
+                .filter(Container.project_key == t.project_key)]
+
+    client.get("/api/tickets/GHS-0311/run/stream").get_data(as_text=True)
+
+    prompt = seen["text"]
+    assert f"Repo: {repo}" in prompt
+    assert f"Project status: {status}" in prompt
+    assert area_ctx in prompt
+    assert cids and all(cid in prompt for cid in cids)
+    assert "gh auth: ok" in prompt
+
+
+def test_ticket_run_stream_routes_an_alert_ticket_to_the_debug_skill(client, monkeypatch):
+    monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
+    seen = {}
+    monkeypatch.setattr("app.acp.run_turn",
+                        _fake_turn("RESULT: x\nREPORT: y", capture=seen))
+    client.post("/api/monitor/alerts", json={"alerts": [{
+        "status": "firing", "fingerprint": "feed0000",
+        "labels": {"alertname": "HighErrorRate", "project": "ghstats"},
+        "annotations": {"summary": "5xx over 5%"}}]})
+
+    client.get("/api/tickets/ALR-FEED0000/run/stream").get_data(as_text=True)
+    assert "debug-issue" in seen["text"]
+
+
+def test_ticket_run_stream_marks_the_fleet_live_when_metrics_answer(client, monkeypatch):
+    """The staleness marker is only worth anything if the API layer actually
+    reports what the metrics store did."""
+    monkeypatch.setenv("DELPHI_ACP_MODE", "acp")
+    monkeypatch.setattr("app.victoria.available", lambda: True)
+    seen = {}
+    monkeypatch.setattr("app.acp.run_turn",
+                        _fake_turn("RESULT: x\nREPORT: y", capture=seen))
+    client.get("/api/tickets/GHS-0311/run/stream").get_data(as_text=True)
+    assert "## Fleet (live)" in seen["text"]

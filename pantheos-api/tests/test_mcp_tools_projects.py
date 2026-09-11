@@ -10,6 +10,21 @@ def test_get_project_spec_includes_context_and_autonomy(session):
     assert "repo" in spec
 
 
+def test_project_spec_names_the_ops_commands(session):
+    """The spec is the only grounding Delphi keeps when the MCP server is itself
+    the thing that is down, so it has to name commands, not describe a stack."""
+    ctx = tools.get_project_spec(session, "groundstation")["context"]
+    assert "python -m pytest" in ctx          # how to verify a change
+    assert "ssh minipc" in ctx                # how to reach the host
+    assert "pantheos-mcp-1" in ctx            # the fleet by container name
+
+
+def test_project_spec_omits_ops_when_a_project_has_none(session):
+    """Projects with no verified ops facts render without the heading rather
+    than inviting the agent to guess at commands."""
+    assert "## Ops" not in tools.get_project_spec(session, "merlin")["context"]
+
+
 def test_get_project_spec_unknown(session):
     assert tools.get_project_spec(session, "nope") == {"error": "unknown project", "key": "nope"}
 

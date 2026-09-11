@@ -11,6 +11,17 @@ TEST_DB = os.environ.get(
 )
 
 
+@pytest.fixture(autouse=True)
+def no_agent_host(monkeypatch):
+    """Keep the run prompt's host probe off the network.
+
+    Without an ssh transport the probe short-circuits, which is how a dev box
+    behaves anyway. Left unset, the default transport points at the real minipc
+    and the suite would reach it on every acp-mode test.
+    """
+    monkeypatch.setenv("DELPHI_ACP_CMD", "hermes acp")
+
+
 @pytest.fixture()
 def app():
     application = create_app({"DATABASE_URL": TEST_DB, "ALLOW_RESEED": True})
