@@ -15,8 +15,8 @@ import time
 PANTHEOS_HOSTS = {"pantheos.app", "www.pantheos.app"}
 RESEARCHVIEWER_HOSTS = {"researchviewer.org", "www.researchviewer.org"}
 GHSTATS_HOSTS = {"gh-stats.com", "www.gh-stats.com"}
-# Tailnet-only Caddy site on :8090; the port is stripped before matching.
-AUTOSIM_HOSTS = {"minipc", "100.117.71.56", "minipc.tail73145c.ts.net"}
+# Caddy :8090 on the tailnet plus the public evc.researchviewer.org route; the port is stripped before matching.
+AUTOSIM_HOSTS = {"minipc", "100.117.71.56", "minipc.tail73145c.ts.net", "evc.researchviewer.org"}
 _TAIL_BYTES = 262_144
 
 
