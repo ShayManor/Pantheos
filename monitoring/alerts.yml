@@ -52,6 +52,22 @@ groups:
           summary: "gh-stats.com is down"
           description: "Blackbox probe of https://gh-stats.com has failed for 2m."
 
+      - alert: HighErrorRate
+        expr: pantheos_caddy_err_ratio{site="minipc:8090"} > 0.05
+        for: 2m
+        labels: { severity: critical, project: autosim, host: minipc, route: "minipc:8090" }
+        annotations:
+          summary: "AutonomousSimulator (minipc:8090) 5xx rate above 5%"
+          description: "The 5xx error ratio for minipc:8090 has exceeded 5% for 2m."
+
+      - alert: SiteDown
+        expr: probe_success{instance="http://100.117.71.56:8090/"} == 0
+        for: 2m
+        labels: { severity: critical, project: autosim, host: minipc, route: "minipc:8090" }
+        annotations:
+          summary: "AutonomousSimulator (minipc:8090) is down"
+          description: "Blackbox probe of http://100.117.71.56:8090/ has failed for 2m."
+
   - name: ghstats
     interval: 30s
     rules:

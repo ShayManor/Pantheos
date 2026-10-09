@@ -85,3 +85,11 @@ def test_prune_all_runs_over_caddy_containers(session, tmp_path):
     p = tmp_path / "access.log"; _write(p, [_rec("pantheos.app", 200, "/a")])
     log_ingest.ingest_once(session, str(p))
     log_ingest.prune_all(session, now=1e9 + 1)              # should not raise
+
+
+def test_ingest_routes_tailnet_host_to_autonomoussim(session, tmp_path):
+    p = tmp_path / "access.log"
+    _write(p, [_rec("minipc:8090", 200, "/"), _rec("100.117.71.56:8090", 502, "/api/jobs")])
+    assert log_ingest.ingest_once(session, str(p)) == 2
+    rows = session.query(LogLine).filter_by(container_id="autonomoussim", source="caddy").all()
+    assert {r.lvl for r in rows} == {"info", "err"}

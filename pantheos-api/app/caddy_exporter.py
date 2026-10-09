@@ -18,6 +18,7 @@ SITES = [
     ("pantheos.app", caddy_logs.PANTHEOS_HOSTS),
     ("researchviewer.org", caddy_logs.RESEARCHVIEWER_HOSTS),
     ("gh-stats.com", caddy_logs.GHSTATS_HOSTS),
+    ("minipc:8090", caddy_logs.AUTOSIM_HOSTS),
 ]
 
 _GAUGES = [

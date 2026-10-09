@@ -45,6 +45,13 @@ INVENTORY = {
     "ghstats-generator-cron": {"cadvisor": "ghstats-generator-cron"},
     "ghstats-fetcher": {"cadvisor": "ghstats-fetcher"},
     "ghstats-fetcher-cron": {"cadvisor": "ghstats-fetcher-cron"},
+    # AutonomousSimulator is tailnet-only (Caddy :8090), probed over plain HTTP.
+    "autonomoussim": {
+        "cadvisor": "autonomoussim",
+        "hosts": caddy_logs.AUTOSIM_HOSTS,
+        "site": "minipc:8090",
+        "probe": "http://100.117.71.56:8090/",
+    },
     # The pantheos stack watching itself — internal sidecars, no public vhost.
     "pantheos-mcp-1": {"cadvisor": "pantheos-mcp-1"},
     "pantheos-db-1": {"cadvisor": "pantheos-db-1"},

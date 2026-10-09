@@ -6,3 +6,10 @@ modules:
       preferred_ip_protocol: ip4
       follow_redirects: true
       fail_if_not_ssl: true
+  # Tailnet-only sites are plain HTTP, so no SSL requirement.
+  http_2xx_plain:
+    prober: http
+    timeout: 5s
+    http:
+      preferred_ip_protocol: ip4
+      follow_redirects: true

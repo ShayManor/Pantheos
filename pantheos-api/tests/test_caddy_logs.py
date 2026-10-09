@@ -136,3 +136,17 @@ def test_empty_when_no_matching_entries(tmp_path, monkeypatch):
     assert caddy_logs.visitors(RV) == 0
     m = caddy_logs.metrics(RV)
     assert len(m["series"]) == 20 and sum(p["v"] for p in m["series"]) == 0
+
+
+def test_autosim_tailnet_hosts_match_with_port(tmp_path, monkeypatch):
+    p = tmp_path / "access.log"
+    p.write_text("\n".join([
+        _line("minipc:8090", "GET", "/", 200, 0.01, T - 2, "100.64.0.1"),
+        _line("100.117.71.56:8090", "GET", "/api/jobs", 200, 0.01, T - 1, "100.64.0.2"),
+        _line("minipc.tail73145c.ts.net:8090", "GET", "/leaderboard", 500, 0.01, T, "100.64.0.3"),
+        _line("pantheos.app", "GET", "/", 200, 0.01, T, "10.0.0.1"),
+    ]) + "\n")
+    monkeypatch.setenv("CADDY_ACCESS_LOG", str(p))
+    lines = caddy_logs.logs(caddy_logs.AUTOSIM_HOSTS)
+    assert [l["msg"].split()[1] for l in lines] == ["/", "/api/jobs", "/leaderboard"]
+    assert caddy_logs.stats(caddy_logs.AUTOSIM_HOSTS)["requests"] == 3

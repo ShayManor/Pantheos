@@ -25,7 +25,7 @@ def test_hosts(client):
 
 def test_containers(client):
     d = client.get("/api/containers").get_json()
-    assert len(d) == 15
+    assert len(d) == 16
     api = next(c for c in d if c["id"] == "ghstats-generator")
     assert api["cpuN"] == 0                            # seeded neutral; live metrics come from the monitor
     assert api["proj"] == "ghstats"
@@ -184,6 +184,21 @@ def test_ghstats_generator_full_site(client, monkeypatch):
     assert gen["cpu"] == "17%" and gen["mem"] == "340M"
     assert gen["rps"] == "12.3/s" and gen["err"] == "0.1%" and gen["p95"] == "205 ms"
     assert gen["up"] == "AOS" and gen["status"] == "go"
+
+
+def test_autonomoussim_full_site(client, monkeypatch):
+    # The tailnet-only sim UI gets the full site treatment, probed over plain HTTP.
+    seen = []
+    _use_vm(monkeypatch, _HEALTHY)
+    q = victoria.query
+    monkeypatch.setattr(victoria, "query", lambda promql: seen.append(promql) or q(promql))
+    sim = _by_id(client, "autonomoussim")
+    assert sim["proj"] == "autosim" and sim["host"] == "minipc"
+    assert sim["rps"] == "12.3/s" and sim["p95"] == "205 ms" and sim["up"] == "AOS"
+    assert 'pantheos_caddy_rps{site="minipc:8090"}' in seen
+    assert 'probe_success{instance="http://100.117.71.56:8090/"}' in seen
+    proj = client.get("/api/projects").get_json()["autosim"]
+    assert proj["area"] == "EVC" and proj["autonomy"] == "propose"
 
 
 def test_cadvisor_only_real_resources(client, monkeypatch):

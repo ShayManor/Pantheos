@@ -79,6 +79,16 @@ PROJECTS = [
          "Club-owned org repo — autonomy is propose (branch + PR only), never commit to main.",
          "Sibling repos: EVC-Purdue/3DGS_Scene, global_racetrajectory_optimization, Autonomous_UI, RideBot.",
      ]},
+    {"key": "autosim", "area_id": "evc", "name": "AutonomousSimulator", "autonomy": "propose",
+     "status": "go", "users": None, "repo": "EVC-Purdue/AutonomousSimulator",
+     "blurb": "End-to-end Chrono simulator that runs the real kart stack across kart designs",
+     "notes": [
+         "Project Chrono kart plant in the loop with the real ROS 2 autonomous_kart stack; every job drives 3 kart designs.",
+         "Flask UI on 127.0.0.1:5060, served tailnet-only by Caddy on minipc:8090 (403 outside the tailnet).",
+         "Container autonomoussim (ghcr.io/evc-purdue/autonomoussim-web:<sha>, host network) on the minipc.",
+         "Deploys via the self-hosted runner minipc (label autonomoussim, service actions.runner.EVC-Purdue-AutonomousSimulator.minipc.service).",
+         "Club-owned org repo: autonomy is propose (branch + PR only), never commit to main.",
+     ]},
     {"key": "horizon", "area_id": "ideas_lab", "name": "Horizon-Reduction", "autonomy": "auto_pr",
      "status": "go", "users": None, "repo": "ShayManor/horizon-reduction",
      "blurb": "Physics-informed horizon reduction for offline goal-conditioned RL",
@@ -153,6 +163,8 @@ CONTAINERS = [
      "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "postgres:16-alpine"},
     {"id": "researchviewer", "proj": "rviewer", "host": "minipc", "role": "web", "status": "go",
      "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "ghcr.io/shaymanor/researchviewerapi"},
+    {"id": "autonomoussim", "proj": "autosim", "host": "minipc", "role": "web", "status": "go",
+     "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "ghcr.io/evc-purdue/autonomoussim-web"},
 ]
 
 # ---------------------------------------------------------------- Delphi config
