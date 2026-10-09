@@ -211,6 +211,42 @@ def test_cadvisor_only_real_resources(client, monkeypatch):
     assert db["status"] == "go"
 
 
+def _access_lines(session, cid, statuses_ms, age=10):
+    import time
+    from app.models import LogLine
+    for status, ms in statuses_ms:
+        session.add(LogLine(container_id=cid, source="docker", ts=time.time() - age, lvl="info",
+                            msg=f'"GET /data/x HTTP/1.1" {status} {ms}ms'))
+    session.commit()
+
+
+def test_access_entry_request_fields_from_gunicorn_lines(client, monkeypatch, session):
+    # The fetcher has no vhost; its rps / 5xx / p95 come from its own access lines.
+    _use_vm(monkeypatch, _HEALTHY)
+    _access_lines(session, "ghstats-fetcher", [(200, 10)] * 18 + [(200, 400), (500, 900)])
+    _access_lines(session, "ghstats-fetcher", [(500, 5)] * 50, age=3600)  # outside the window
+    f = _by_id(client, "ghstats-fetcher")
+    assert f["rps"] == "0.0/s" and f["err"] == "5.0%" and f["p95"] == "400 ms"
+    assert f["status"] == "flt"                          # 5.0% 5xx is over the 2% line
+
+
+def test_access_entry_idle_is_zero_traffic(client, monkeypatch):
+    # No access lines in the window means real zero traffic, not a seeded value.
+    _use_vm(monkeypatch, _HEALTHY)
+    e = _by_id(client, "ghstats-edge")
+    assert e["rps"] == "0.0/s" and e["err"] == "0.0%" and e["p95"] == "—"
+    assert e["status"] == "go"
+
+
+def test_unprobed_container_up_from_cadvisor(client, monkeypatch):
+    # Without a blackbox probe, cAdvisor's last-seen age decides up / down.
+    _use_vm(monkeypatch, {**_HEALTHY, "container_last_seen": 8.0})
+    assert _by_id(client, "ghstats-generator-cron")["up"] == "AOS"
+    _use_vm(monkeypatch, {**_HEALTHY, "container_last_seen": 900.0})
+    cron = _by_id(client, "ghstats-generator-cron")
+    assert cron["up"] == "LOS" and cron["status"] == "los"
+
+
 def test_cadvisor_only_status_fault_by_restarts(client, monkeypatch):
     # A crash-looping internal container turns red on restarts alone.
     _use_vm(monkeypatch, {**_HEALTHY, "changes(container_start_time": 5})

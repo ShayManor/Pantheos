@@ -41,6 +41,18 @@ def test_level_warn_on_warning_markers():
 def test_level_info_default():
     assert docker_logs.level("[INFO] Booting worker with pid: 8") == "info"
 
+def test_access_parses_gunicorn_line():
+    assert docker_logs.access('"GET /data/ShayManor HTTP/1.1" 200 34ms') == {"status": 200, "ms": 34}
+
+def test_access_none_for_other_lines():
+    assert docker_logs.access("[INFO] Booting worker with pid: 8") is None
+
+def test_level_access_line_by_status():
+    assert docker_logs.level('"POST /fetch HTTP/1.1" 502 9ms') == "err"
+    assert docker_logs.level('"GET /data/x HTTP/1.1" 404 2ms') == "warn"
+    # A 200 for a path that merely contains "error" is not an error.
+    assert docker_logs.level('"GET /errors.svg HTTP/1.1" 200 5ms') == "info"
+
 
 def test_name_from_config_strips_leading_slash():
     cfg = json.dumps({"Name": "/pantheos-mcp-1"})

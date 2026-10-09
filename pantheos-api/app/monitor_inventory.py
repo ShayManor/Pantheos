@@ -40,10 +40,12 @@ INVENTORY = {
         "site": "gh-stats.com",
         "probe": "https://gh-stats.com",
     },
-    "ghstats-edge": {"cadvisor": "ghstats-edge"},
+    # edge and fetcher sit behind no vhost; their request fields come from the
+    # gunicorn access lines in their own stdout (``access``).
+    "ghstats-edge": {"cadvisor": "ghstats-edge", "access": True},
     "ghstats-generator-worker": {"cadvisor": "ghstats-generator-worker"},
     "ghstats-generator-cron": {"cadvisor": "ghstats-generator-cron"},
-    "ghstats-fetcher": {"cadvisor": "ghstats-fetcher"},
+    "ghstats-fetcher": {"cadvisor": "ghstats-fetcher", "access": True},
     "ghstats-fetcher-cron": {"cadvisor": "ghstats-fetcher-cron"},
     # AutonomousSimulator is tailnet-only (Caddy :8090), probed over plain HTTP.
     "autonomoussim": {

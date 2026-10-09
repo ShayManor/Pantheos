@@ -1,14 +1,18 @@
+import math
+import time
+
 from flask import Blueprint, jsonify, request
 from sqlalchemy import func
 
 from . import db, get_or_404
-from .. import caddy_logs, logview, metrics, scoring, victoria
+from .. import caddy_logs, docker_logs, logview, metrics, scoring, victoria
 from ..models import Area, Container, Host, LogLine, Project, Ticket
 from ..monitor_inventory import INVENTORY, PROJECT_HOSTS, entry
 
 bp = Blueprint("monitor", __name__, url_prefix="/api")
 
 _DAYS = 14
+_ACCESS_WINDOW = 900  # seconds of gunicorn access lines behind an ``access`` entry
 
 
 @bp.get("/areas")
@@ -222,6 +226,20 @@ def _derive_status(err_pct, p95_ms, restarts, up):
     return "go"
 
 
+def _access_stats(cid, now):
+    """(rps, 5xx ratio, p95 ms) from a container's gunicorn access lines in the window."""
+    rows = (db().query(LogLine.msg)
+            .filter(LogLine.container_id == cid, LogLine.source == "docker",
+                    LogLine.ts >= now - _ACCESS_WINDOW).all())
+    reqs = [r for r in (docker_logs.access(m) for (m,) in rows) if r]
+    if not reqs:
+        return 0.0, 0.0, None
+    ms = sorted(r["ms"] for r in reqs)
+    return (len(reqs) / _ACCESS_WINDOW,
+            sum(r["status"] >= 500 for r in reqs) / len(reqs),
+            ms[max(0, math.ceil(0.95 * len(ms)) - 1)])
+
+
 def _apply_real(d, inv):
     """Overlay live VictoriaMetrics values onto a container's serialized dict.
 
@@ -240,6 +258,11 @@ def _apply_real(d, inv):
     err = victoria.query(f'pantheos_caddy_err_ratio{{site="{site}"}}') if site else None
     p95 = victoria.query(f'pantheos_caddy_p95_ms{{site="{site}"}}') if site else None
     up_probe = victoria.query(f'probe_success{{instance="{probe}"}}') if probe else None
+    if inv.get("access"):
+        rps, err, p95 = _access_stats(d["id"], time.time())
+    # Without a probe, a container is up while cAdvisor still sees it running.
+    seen = None if probe else victoria.query(
+        f'time() - max(max_over_time(container_last_seen{{name="{name}"}}[1h]))')
 
     if cpu is not None:
         d["cpu"], d["cpuN"] = f"{round(cpu)}%", round(cpu)
@@ -255,7 +278,10 @@ def _apply_real(d, inv):
         d["p95"] = f"{round(p95)} ms"
     if up_probe is not None:
         d["up"] = "AOS" if up_probe >= 1 else "LOS"
+    if seen is not None:
+        d["up"] = "AOS" if seen < 60 else "LOS"
 
-    if err is not None or p95 is not None or up_probe is not None or restarts is not None:
+    if (err is not None or p95 is not None or up_probe is not None or restarts is not None
+            or seen is not None):
         err_pct = err * 100 if err is not None else _parse_pct(d["err"])
         d["status"] = _derive_status(err_pct, p95, d["restarts"], d["up"])
