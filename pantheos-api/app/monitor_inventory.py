@@ -54,6 +54,8 @@ INVENTORY = {
         "site": "minipc:8090",
         "probe": "http://100.117.71.56:8090/",
     },
+    # RideBot is a Discord bot: no HTTP, so cAdvisor-only.
+    "ridebot": {"cadvisor": "ridebot"},
     # The pantheos stack watching itself — internal sidecars, no public vhost.
     "pantheos-mcp-1": {"cadvisor": "pantheos-mcp-1"},
     "pantheos-db-1": {"cadvisor": "pantheos-db-1"},

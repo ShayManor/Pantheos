@@ -25,7 +25,7 @@ def test_hosts(client):
 
 def test_containers(client):
     d = client.get("/api/containers").get_json()
-    assert len(d) == 16
+    assert len(d) == 17
     api = next(c for c in d if c["id"] == "ghstats-generator")
     assert api["cpuN"] == 0                            # seeded neutral; live metrics come from the monitor
     assert api["proj"] == "ghstats"
@@ -245,6 +245,15 @@ def test_unprobed_container_up_from_cadvisor(client, monkeypatch):
     _use_vm(monkeypatch, {**_HEALTHY, "container_last_seen": 900.0})
     cron = _by_id(client, "ghstats-generator-cron")
     assert cron["up"] == "LOS" and cron["status"] == "los"
+
+
+def test_ridebot_cadvisor_only(client, monkeypatch):
+    # The Discord bot serves no HTTP: real resources and uptime, no request fields.
+    _use_vm(monkeypatch, {**_HEALTHY, "container_last_seen": 5.0})
+    bot = _by_id(client, "ridebot")
+    assert bot["proj"] == "ridebot" and bot["cpu"] == "17%" and bot["up"] == "AOS"
+    assert bot["rps"] == "—" and bot["status"] == "go"
+    assert client.get("/api/projects").get_json()["ridebot"]["area"] == "EVC"
 
 
 def test_cadvisor_only_status_fault_by_restarts(client, monkeypatch):

@@ -89,6 +89,15 @@ PROJECTS = [
          "Deploys via the self-hosted runner minipc (label autonomoussim, service actions.runner.EVC-Purdue-AutonomousSimulator.minipc.service).",
          "Club-owned org repo: autonomy is propose (branch + PR only), never commit to main.",
      ]},
+    {"key": "ridebot", "area_id": "evc", "name": "RideBot", "autonomy": "propose",
+     "status": "go", "users": None, "repo": "EVC-Purdue/RideBot",
+     "blurb": "Discord bot that coordinates rides to the EVC lab",
+     "notes": [
+         "Discord bot (EVC Ride Request Bot) in the Electric Vehicle Club server: /ride_request, /add_driver, /schedule_drive, /move, /edit, /clean.",
+         "Container ridebot (ghcr.io/evc-purdue/ridebot:<sha>, bridge network, no HTTP traffic) on the minipc, run outside compose.",
+         "Image built by the repo's docker-build.yml workflow.",
+         "Club-owned org repo: autonomy is propose (branch + PR only), never commit to main.",
+     ]},
     {"key": "horizon", "area_id": "ideas_lab", "name": "Horizon-Reduction", "autonomy": "auto_pr",
      "status": "go", "users": None, "repo": "ShayManor/horizon-reduction",
      "blurb": "Physics-informed horizon reduction for offline goal-conditioned RL",
@@ -165,6 +174,8 @@ CONTAINERS = [
      "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "ghcr.io/shaymanor/researchviewerapi"},
     {"id": "autonomoussim", "proj": "autosim", "host": "minipc", "role": "web", "status": "go",
      "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "ghcr.io/evc-purdue/autonomoussim-web"},
+    {"id": "ridebot", "proj": "ridebot", "host": "minipc", "role": "bot", "status": "go",
+     "cpu": "—", "cpu_n": 0, "mem": "—", "err": "—", "rps": "—", "p95": "—", "restarts": 0, "up": "AOS", "image": "ghcr.io/evc-purdue/ridebot"},
 ]
 
 # ---------------------------------------------------------------- Delphi config
