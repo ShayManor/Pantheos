@@ -219,6 +219,65 @@ def test_drive_async_loads_existing_session(monkeypatch):
     assert events[-1]["hermes_session_id"] == "hs1"
 
 
+def test_drive_async_drops_history_replayed_by_load_session(monkeypatch):
+    # `session/load` replays the prior conversation as session/update
+    # notifications on the wire before its response, and acp dispatches those
+    # on separate tasks that can still be pending when load_session resolves.
+    # None of it may leak into this turn's reply.
+    import asyncio
+    import acp
+    from acp.client.router import build_client_router
+    from acp.connection import StreamDirection, StreamEvent
+
+    def update(kind, text):
+        return {"sessionId": "hs1",
+                "update": {"sessionUpdate": kind, "content": {"type": "text", "text": text}}}
+
+    class FakeConn:
+        def __init__(self, bridge, observers):
+            self._router = build_client_router(bridge, use_unstable_protocol=True)
+            self._observe = observers[0]
+
+        def _wire(self, direction, message):
+            self._observe(StreamEvent(direction, message))
+
+        async def initialize(self, **kw):
+            self._wire(StreamDirection.OUTGOING, {"id": 0, "method": "initialize"})
+            self._wire(StreamDirection.INCOMING, {"id": 0, "result": {}})
+
+        async def load_session(self, **kw):
+            self._wire(StreamDirection.OUTGOING, {"id": 1, "method": "session/load"})
+            old = [update("user_message_chunk", "What's on fire?"),
+                   update("agent_thought_chunk", "old thought"),
+                   update("agent_message_chunk", "OLD ANSWER"),
+                   {"sessionId": "hs1", "update": {"sessionUpdate": "tool_call",
+                                                   "toolCallId": "9", "title": "old_tool"}}]
+            for params in old:
+                self._wire(StreamDirection.INCOMING, {"method": "session/update", "params": params})
+            self._wire(StreamDirection.INCOMING, {"id": 1, "result": {}})
+            # Dispatch lags the wire: the handlers run only after load resolves.
+            for params in old:
+                asyncio.get_running_loop().call_later(
+                    0.02, asyncio.ensure_future, self._router("session/update", params, True))
+
+        async def prompt(self, session_id, prompt, **kw):
+            await self._router("session/update", update("agent_message_chunk", "NEW ANSWER"), True)
+
+    def fake_spawn(to_client, command, *args, observers=None, **kwargs):
+        return _FakeCtx(FakeConn(to_client(None), observers))
+
+    monkeypatch.setattr(acp, "spawn_agent_process", fake_spawn)
+
+    events = []
+    acp_client._drive("Why 5xx?", "hs1", events.append)
+
+    assert [e["type"] for e in events] == ["text", "done"]
+    done = events[-1]
+    assert done["text"] == "NEW ANSWER"
+    assert done["reasoning"] == ""
+    assert done["tools"] == []
+
+
 def test_content_text_handles_none_single_and_list():
     class Block:
         def __init__(self, text):

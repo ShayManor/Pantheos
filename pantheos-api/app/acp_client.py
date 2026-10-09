@@ -63,11 +63,30 @@ async def _drive_async(text, hermes_session_id, on_event, auto_approve=True):
     from acp.schema import (AgentMessageChunk, AgentThoughtChunk,
                             AllowedOutcome, RequestPermissionResponse,
                             ToolCallProgress, ToolCallStart, ToolCallUpdate)
+    from acp.connection import StreamDirection
 
     cmd = shlex.split(os.environ.get("DELPHI_ACP_CMD", _DEFAULT_ACP_CMD))
     timeout = float(os.environ.get("DELPHI_ACP_TIMEOUT", "180"))
 
     acc = {"text": "", "reasoning": "", "tools": [], "sid": hermes_session_id}
+
+    # `session/load` replays the whole prior conversation as session/update
+    # notifications before its response, and acp dispatches notifications on
+    # separate tasks, so some replay may still be pending when load_session
+    # resolves. The observer counts replayed updates in wire order; the bridge
+    # drops every update until `live`, which is set only once all of them ran.
+    phase = {"load_id": None, "loading": False, "replay": 0, "dropped": 0, "live": False}
+
+    def _observe(event):
+        msg = event.message
+        if event.direction == StreamDirection.OUTGOING:
+            if msg.get("method") == "session/load":
+                phase["load_id"], phase["loading"] = msg.get("id"), True
+        elif phase["loading"]:
+            if msg.get("method") == "session/update":
+                phase["replay"] += 1
+            elif "method" not in msg and msg.get("id") == phase["load_id"]:
+                phase["loading"] = False
 
     class _Bridge(acp.Client):
         # NOTE: acp's MessageRouter dispatches Client overrides by keyword args
@@ -80,6 +99,9 @@ async def _drive_async(text, hermes_session_id, on_event, auto_approve=True):
         # `contextlib.suppress(Exception)` around notification dispatch
         # swallows the resulting TypeError).
         async def session_update(self, session_id, update, **kwargs):
+            if not phase["live"]:
+                phase["dropped"] += 1
+                return
             if isinstance(update, AgentThoughtChunk):
                 delta = _content_text(update.content)
                 acc["reasoning"] += delta
@@ -118,15 +140,20 @@ async def _drive_async(text, hermes_session_id, on_event, auto_approve=True):
 
     async with acp.spawn_agent_process(
             lambda agent: _Bridge(), cmd[0], *cmd[1:],
-            use_unstable_protocol=True) as (conn, proc):
+            use_unstable_protocol=True, observers=[_observe]) as (conn, proc):
         await conn.initialize(protocol_version=acp.PROTOCOL_VERSION, client_capabilities=None)
         if hermes_session_id:
             await conn.load_session(cwd=os.getcwd(), session_id=hermes_session_id, mcp_servers=_mcp_servers())
             sid = hermes_session_id
+            deadline = asyncio.get_running_loop().time() + 5
+            while (phase["dropped"] < phase["replay"]
+                   and asyncio.get_running_loop().time() < deadline):
+                await asyncio.sleep(0.01)
         else:
             resp = await conn.new_session(cwd=os.getcwd(), mcp_servers=_mcp_servers())
             sid = resp.session_id
         acc["sid"] = sid
+        phase["live"] = True
         try:
             await asyncio.wait_for(
                 conn.prompt(session_id=sid, prompt=[{"type": "text", "text": text}]),
