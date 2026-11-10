@@ -85,6 +85,15 @@ def serve():  # pragma: no cover - process loop
     interval = int(os.environ.get("LOG_INGEST_INTERVAL", "5"))
     ghstats_dir = os.environ.get("GHSTATS_DATA_DIR")
     last_sync = 0.0
+    # Pull Caddy's rolled logs into the analytics tables once per start. It only
+    # adds rows older than what is stored, so a restart never duplicates; the
+    # first run_once goes first so a fresh DB takes the live log by offset.
+    run_once(app.db_session, path, time.time())
+    try:
+        print("analytics backfill:", analytics.backfill_web(app.db_session, path), "rows", flush=True)
+    except Exception as exc:  # never crash-loop the ingest over history
+        app.db_session.rollback()
+        print("analytics backfill failed:", exc, flush=True)
     while True:
         run_once(app.db_session, path, time.time())
         if ghstats_dir and time.time() - last_sync > 300:
