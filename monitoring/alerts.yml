@@ -90,7 +90,7 @@ groups:
       # The scan timer runs every 30m when the CPU is idle and at least every 2h,
       # so 3h without a success means runs are failing or not firing.
       - alert: GpuScanStale
-        expr: time() - gpuscanner_job_last_success_timestamp_seconds{job="scan"} > 3 * 3600
+        expr: time() - gpuscanner_job_last_success_timestamp_seconds{task="scan"} > 3 * 3600
         for: 5m
         labels: { severity: critical, project: gpufindr, host: minipc }
         annotations:
@@ -98,7 +98,7 @@ groups:
           description: "gpufindr.com prices are going stale. Check `journalctl --user -u gpuscanner-scan` on the minipc."
 
       - alert: GpuScanFailed
-        expr: gpuscanner_job_exit_code{job="scan"} != 0
+        expr: gpuscanner_job_exit_code{task="scan"} != 0
         for: 0m
         labels: { severity: warning, project: gpufindr, host: minipc }
         annotations:
@@ -114,7 +114,7 @@ groups:
           description: "Several providers are returning nothing (a normal scan has ~1000 rows). See gpuscanner_rows by source."
 
       - alert: GpuBlogStale
-        expr: time() - gpuscanner_job_last_success_timestamp_seconds{job="blog"} > 26 * 3600
+        expr: time() - gpuscanner_job_last_success_timestamp_seconds{task="blog"} > 26 * 3600
         for: 5m
         labels: { severity: warning, project: gpufindr, host: minipc }
         annotations:
