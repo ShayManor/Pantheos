@@ -25,12 +25,12 @@ def list_areas():
 def list_projects():
     rows = db().query(Project).order_by(Project.position).all()
     out = {p.key: p.to_dict() for p in rows}
-    # Real recent-visitor count (distinct client IPs) from the Caddy access log;
+    # Real 7-day visitor count (distinct client IPs) from the Caddy access logs;
     # VictoriaMetrics stores metrics, not per-visitor identity, so this stays log-derived.
     if caddy_logs.available():
         for key, hosts in PROJECT_HOSTS.items():
             if key in out:
-                out[key]["users"] = caddy_logs.visitors(hosts)
+                out[key]["users"] = caddy_logs.visitors_7d(hosts)
     return jsonify(out)
 
 

@@ -73,6 +73,7 @@ INVENTORY = {
 # project key -> Caddy vhost(s) whose distinct visitors back its "users" count.
 PROJECT_HOSTS = {
     "rviewer": caddy_logs.RESEARCHVIEWER_HOSTS,
+    "gpufindr": caddy_logs.GPUFINDR_HOSTS,
 }
 
 

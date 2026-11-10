@@ -389,7 +389,8 @@ def _rv_caddy_log(tmp_path, monkeypatch):
         json.dumps({"ts": 1e9 + i, "duration": 0.05, "status": 200,
                     "request": {"method": "GET", "host": "researchviewer.org",
                                 "uri": f"/paper/{i}", "client_ip": "127.0.0.1",
-                                "headers": {"Cf-Connecting-Ip": [ip]}}})
+                                "headers": {"Cf-Connecting-Ip": [ip],
+                                            "User-Agent": ["Mozilla/5.0"]}}})
         for i, ip in enumerate(ips)) + "\n")
     monkeypatch.setenv("CADDY_ACCESS_LOG", str(p))
     return p
@@ -408,6 +409,17 @@ def test_rviewer_project_users_are_real_visitor_count(client, tmp_path, monkeypa
     _rv_caddy_log(tmp_path, monkeypatch)
     projects = client.get("/api/projects").get_json()
     assert projects["rviewer"]["users"] == 3  # distinct Cf-Connecting-Ip count
+
+
+def test_gpufindr_project_users_are_real_visitor_count(client, tmp_path, monkeypatch):
+    p = tmp_path / "access.log"
+    p.write_text(json.dumps({"ts": 1e9, "duration": 0.05, "status": 200,
+                             "request": {"method": "GET", "host": "www.gpufindr.com", "uri": "/",
+                                         "client_ip": "127.0.0.1",
+                                         "headers": {"Cf-Connecting-Ip": ["4.4.4.4"],
+                                                     "User-Agent": ["Mozilla/5.0"]}}}) + "\n")
+    monkeypatch.setenv("CADDY_ACCESS_LOG", str(p))
+    assert client.get("/api/projects").get_json()["gpufindr"]["users"] == 1
 
 
 def test_rviewer_project_users_none_without_log(client, monkeypatch):

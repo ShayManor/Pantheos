@@ -51,7 +51,7 @@ PROJECTS = [
          "146 enrolled users (generator settings.db). daily_stats usernames include scanner noise — don't count them.",
      ]},
     {"key": "gpufindr", "area_id": "side", "name": "GPUFindr", "autonomy": "full",
-     "status": "cau", "users": 1140, "repo": "ShayManor/GpuScanner",
+     "status": "cau", "users": None, "repo": "ShayManor/GpuScanner",
      "blurb": "GPU availability + price aggregator",
      "notes": [
          "Live at gpufindr.com — a Go app scanning GPU price/availability across 14 providers (Vast.ai, RunPod, Lambda, Azure, Lium, ...).",

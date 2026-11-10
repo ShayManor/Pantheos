@@ -7,9 +7,12 @@ filtered to a given set of hosts. When the log is absent — dev, CI, the E2E bo
 the suite stays deterministic. Windows are relative to the newest log entry,
 never the wall clock, for the same reason.
 """
+import glob
+import gzip
 import json
 import math
 import os
+import re
 import time
 
 PANTHEOS_HOSTS = {"pantheos.app", "www.pantheos.app"}
@@ -19,6 +22,11 @@ GPUFINDR_HOSTS = {"gpufindr.com", "www.gpufindr.com"}
 # Caddy :8090 on the tailnet plus the public evc.researchviewer.org route; the port is stripped before matching.
 AUTOSIM_HOSTS = {"minipc", "100.117.71.56", "minipc.tail73145c.ts.net", "evc.researchviewer.org"}
 _TAIL_BYTES = 262_144
+_WEEK = 7 * 86_400
+_WEEK_CACHE_SECONDS = 3600
+_BOT_UA = re.compile(r"bot|crawl|spider|slurp|headless|python|curl|wget|go-http|scanner|preview", re.I)
+_PROBE_URIS = ("/.env", "/.git", "/wp-", "/xmlrpc")
+_week_cache = {}  # (log path, hosts) -> (computed at, count)
 
 
 def _log_path():
@@ -134,6 +142,52 @@ def metrics(hosts):
 def visitors(hosts):
     """Distinct client IPs seen for ``hosts`` over the tail window."""
     return len({e["ip"] for e in _entries(hosts) if e["ip"]})
+
+
+def _log_files(path):
+    """The live log plus Caddy's rolled, gzipped siblings (access-<time>.log.gz)."""
+    stem, ext = os.path.splitext(path)
+    return [path] + sorted(glob.glob(f"{stem}-*{ext}.gz"), reverse=True)
+
+
+def visitors_7d(hosts):
+    """Distinct browser visitors (client IPs) for ``hosts`` over the 7 days
+    before the newest matching entry, read across the rolled logs.
+
+    Crawlers, scripts and vulnerability probes are left out. Reading a week of
+    gzipped logs takes seconds, so the count is cached for an hour.
+    """
+    p = _log_path()
+    if not p:
+        return 0
+    key = (p, frozenset(hosts))
+    hit = _week_cache.get(key)
+    if hit and time.time() - hit[0] < _WEEK_CACHE_SECONDS:
+        return hit[1]
+    seen = []
+    for path in _log_files(p):
+        if path.endswith(".gz") and os.path.getmtime(path) < time.time() - _WEEK:
+            break  # rolled files are newest first; the rest end before the window
+        opener = gzip.open if path.endswith(".gz") else open
+        with opener(path, "rt", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if not any(h in line for h in hosts):
+                    continue
+                try:
+                    rec = json.loads(line)
+                    req = rec["request"]
+                    if req["host"].split(":", 1)[0] not in hosts:
+                        continue
+                    ua = (req.get("headers", {}).get("User-Agent") or [""])[0]
+                    if "Mozilla" not in ua or _BOT_UA.search(ua) or req["uri"].startswith(_PROBE_URIS):
+                        continue
+                    seen.append((float(rec["ts"]), _client_ip(req)))
+                except (ValueError, KeyError, TypeError):
+                    continue
+    newest = max((ts for ts, _ in seen), default=0.0)
+    count = len({ip for ts, ip in seen if ip and ts >= newest - _WEEK})
+    _week_cache[key] = (time.time(), count)
+    return count
 
 
 def stats(hosts):

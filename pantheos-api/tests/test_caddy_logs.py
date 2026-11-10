@@ -1,4 +1,5 @@
 import json
+import os
 
 import pytest
 
@@ -106,6 +107,46 @@ def test_visitors_falls_back_to_client_ip_without_header(tmp_path, monkeypatch):
     p.write_text(json.dumps(rec) + "\n")
     monkeypatch.setenv("CADDY_ACCESS_LOG", str(p))
     assert caddy_logs.visitors(RV) == 1
+
+
+def _ua_line(host, uri, ts, ip, ua="Mozilla/5.0 (Macintosh)"):
+    rec = json.loads(_line(host, "GET", uri, 200, 0.01, ts, ip))
+    rec["request"]["headers"]["User-Agent"] = [ua]
+    return json.dumps(rec)
+
+
+def test_visitors_7d_reads_rolled_logs_and_skips_bots(tmp_path, monkeypatch):
+    import gzip
+    week = 7 * 86_400
+    p = tmp_path / "access.log"
+    p.write_text("\n".join([
+        _ua_line("gpufindr.com", "/", T, "1.0.0.1"),
+        _ua_line("www.gpufindr.com", "/", T - 5, "1.0.0.1"),             # same visitor
+        _ua_line("gpufindr.com", "/", T - 4, "1.0.0.2", ua="Googlebot/2.1 Mozilla"),
+        _ua_line("gpufindr.com", "/", T - 3, "1.0.0.3", ua="curl/8.0"),
+        _ua_line("gpufindr.com", "/.env", T - 2, "1.0.0.4"),            # probe
+        _ua_line("researchviewer.org", "/", T - 1, "1.0.0.5"),           # other site
+        _ua_line("api.gpufindr.com", "/", T - 1, "1.0.0.8"),             # name only contains it
+        json.dumps({"ts": T, "request": {"host": "gpufindr.com",       # missing uri
+                                         "headers": {"User-Agent": ["Mozilla/5.0"]}}}),
+        "gpufindr.com but not json",
+    ]) + "\n")
+    with gzip.open(tmp_path / "access-2001-09-08T00-00-00.000-size.log.gz", "wt") as f:
+        f.write(_ua_line("gpufindr.com", "/", T - 3600, "1.0.0.6") + "\n")
+        f.write(_ua_line("gpufindr.com", "/", T - week - 1, "1.0.0.7") + "\n")  # too old
+    with gzip.open(tmp_path / "access-2001-09-01T00-00-00.000-size.log.gz", "wt") as f:
+        f.write(_ua_line("gpufindr.com", "/", T - 60, "1.0.0.9") + "\n")
+    old = (tmp_path / "access-2001-09-01T00-00-00.000-size.log.gz")
+    os.utime(old, (0, 0))                                            # rolled over a week ago: skipped
+    monkeypatch.setenv("CADDY_ACCESS_LOG", str(p))
+    assert caddy_logs.visitors_7d(caddy_logs.GPUFINDR_HOSTS) == 2   # 1.0.0.1 and .6
+    p.write_text("")                                                # cached for an hour
+    assert caddy_logs.visitors_7d(caddy_logs.GPUFINDR_HOSTS) == 2
+
+
+def test_visitors_7d_zero_when_unset(monkeypatch):
+    monkeypatch.delenv("CADDY_ACCESS_LOG", raising=False)
+    assert caddy_logs.visitors_7d(RV) == 0
 
 
 def test_logs_empty_when_unset(monkeypatch):
