@@ -191,7 +191,7 @@ def sample_analytics():
         rate = 3 + int(_r("rate", i) * 25)
         for ago in range(start, end - 1, -1):
             for h in range(24 if ago else 16):              # nothing after "now"
-                n = int(rate * _hour_weight(h) / 6 + _r("ev", i, ago, h))
+                n = int(rate * _hour_weight(h) / 24 + _r("ev", i, ago, h))
                 for k in range(n):
                     loads.append({"username": name.lower(),
                                   "ts": ANALYTICS_NOW - ago * day - (15 - h) * 3600 + k * 97,

@@ -184,6 +184,7 @@ def seed_sample_analytics(session):
     from . import sample_data as SS
     from .models import GhstatsLoad, GhstatsUser, WebHit
     users, loads, hits = SS.sample_analytics()
-    session.add_all([GhstatsUser(**u) for u in users])
-    session.add_all([GhstatsLoad(**ld) for ld in loads])
-    session.add_all([WebHit(**h) for h in hits])
+    from sqlalchemy import insert
+    session.execute(insert(GhstatsUser), users)       # bulk executemany: ~15k demo rows per reseed
+    session.execute(insert(GhstatsLoad), loads)
+    session.execute(insert(WebHit), hits)
