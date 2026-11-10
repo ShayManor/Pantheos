@@ -13,8 +13,7 @@ so CPU / memory / restarts are always available). ``hosts`` / ``site`` / ``probe
 are optional and only present for containers a public Caddy vhost fronts: with
 them a container also gets request rate / 5xx / p95 / uptime and access-log
 lines; without them it's a cAdvisor-only entry (internal sidecars — db, mcp,
-workers, crons — that have no vhost). ``gpu-api`` is deliberately absent: it runs
-on Cloud Run, invisible to the minipc's cAdvisor, so it stays on the mock.
+workers, crons — that have no vhost).
 """
 from . import caddy_logs
 
@@ -47,6 +46,15 @@ INVENTORY = {
     "ghstats-generator-cron": {"cadvisor": "ghstats-generator-cron"},
     "ghstats-fetcher": {"cadvisor": "ghstats-fetcher", "access": True},
     "ghstats-fetcher-cron": {"cadvisor": "ghstats-fetcher-cron"},
+    # GPUFindr's compose stack: the Go API serves gpufindr.com; its Postgres is
+    # internal. The scan/blog jobs are timer-run and report via node_exporter.
+    "gpuscanner-api-1": {
+        "cadvisor": "gpuscanner-api-1",
+        "hosts": caddy_logs.GPUFINDR_HOSTS,
+        "site": "gpufindr.com",
+        "probe": "https://gpufindr.com",
+    },
+    "gpuscanner-db-1": {"cadvisor": "gpuscanner-db-1"},
     # AutonomousSimulator is tailnet-only (Caddy :8090), probed over plain HTTP.
     "autonomoussim": {
         "cadvisor": "autonomoussim",

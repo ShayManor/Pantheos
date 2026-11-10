@@ -64,6 +64,8 @@ services:
     pid: host
     command:
       - "--path.rootfs=/host"
+      # Cron-style jobs (gpuscanner scan/blog) drop *.prom files here.
+      - "--collector.textfile.directory=/host/var/lib/node_exporter/textfile"
     volumes:
       - "/:/host:ro,rslave"
     restart: unless-stopped

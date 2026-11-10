@@ -25,7 +25,7 @@ def test_hosts(client):
 
 def test_containers(client):
     d = client.get("/api/containers").get_json()
-    assert len(d) == 17
+    assert len(d) == 18
     api = next(c for c in d if c["id"] == "ghstats-generator")
     assert api["cpuN"] == 0                            # seeded neutral; live metrics come from the monitor
     assert api["proj"] == "ghstats"
@@ -70,7 +70,7 @@ def test_container_log_range_returns_raw_lines(client):
 def test_log_range_empty_for_noninventory_under_caddy(client, tmp_path, monkeypatch):
     # Real logging up, but this container isn't in the inventory: no range lines.
     _caddy_log(tmp_path, monkeypatch)
-    d = client.get("/api/containers/gpu-api/logs/range?from=1&to=2").get_json()
+    d = client.get("/api/containers/merlin-planner/logs/range?from=1&to=2").get_json()
     assert d["lines"] == []
 
 
@@ -166,10 +166,10 @@ def test_container_partial_vm_keeps_seeded(client, monkeypatch):
 
 
 def test_noninventory_container_stays_mock_under_vm(client, monkeypatch):
-    # gpu-api runs on Cloud Run, invisible to the minipc's cAdvisor, so it's not
-    # in the inventory and keeps its seeded values even when VM is up.
+    # merlin-planner runs on the jetson, invisible to the minipc's cAdvisor, so it's
+    # not in the inventory and keeps its seeded values even when VM is up.
     _use_vm(monkeypatch, _HEALTHY)
-    api = next(c for c in client.get("/api/containers").get_json() if c["id"] == "gpu-api")
+    api = next(c for c in client.get("/api/containers").get_json() if c["id"] == "merlin-planner")
     assert api["cpuN"] == 0 and api["rps"] == "—"     # seeded (neutral), non-inventory stays as-is
 
 
@@ -184,6 +184,16 @@ def test_ghstats_generator_full_site(client, monkeypatch):
     assert gen["cpu"] == "17%" and gen["mem"] == "340M"
     assert gen["rps"] == "12.3/s" and gen["err"] == "0.1%" and gen["p95"] == "205 ms"
     assert gen["up"] == "AOS" and gen["status"] == "go"
+
+
+def test_gpufindr_api_full_site(client, monkeypatch):
+    # The Go API fronts gpufindr.com; its Postgres is cAdvisor-only.
+    _use_vm(monkeypatch, _HEALTHY)
+    api = _by_id(client, "gpuscanner-api-1")
+    assert api["proj"] == "gpufindr" and api["host"] == "minipc"
+    assert api["rps"] == "12.3/s" and api["up"] == "AOS" and api["status"] == "go"
+    db = _by_id(client, "gpuscanner-db-1")
+    assert db["cpu"] == "17%" and db["rps"] == "—"
 
 
 def test_autonomoussim_full_site(client, monkeypatch):
@@ -306,7 +316,7 @@ def test_container_metrics_from_victoria(client, monkeypatch):
 def test_container_metrics_empty_for_noninventory_under_vm(client, monkeypatch):
     # Real monitoring up, but this container isn't in the inventory: no series.
     _use_vm(monkeypatch, range_vals=[3.0] * 20)
-    d = client.get("/api/containers/gpu-api/metrics").get_json()
+    d = client.get("/api/containers/merlin-planner/metrics").get_json()
     assert d["series"] == [] and d["monitored"] is False
 
 
@@ -368,7 +378,7 @@ def test_pantheos_logs_fall_back_to_mock(client, monkeypatch):
 def test_logs_empty_for_noninventory_under_caddy(client, tmp_path, monkeypatch):
     # Real logging up, but this container isn't in the inventory: no log lines.
     _caddy_log(tmp_path, monkeypatch)
-    d = client.get("/api/containers/gpu-api/logs").get_json()
+    d = client.get("/api/containers/merlin-planner/logs").get_json()
     assert d["items"] == [] and d["monitored"] is False
 
 
