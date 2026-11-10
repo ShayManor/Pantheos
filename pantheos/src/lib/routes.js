@@ -14,6 +14,7 @@ export function pathForNode(node) {
   }
   if (v === "projects") return node.projectId ? `/projects/${node.projectId}` : "/projects";
   if (v === "flight") return "/delphi";
+  if (v === "analytics") return "/analytics";
   return "/queue";
 }
 
@@ -32,6 +33,7 @@ export function nodeFromPath(pathname) {
     return { view: "monitor" };
   }
   if (a === "delphi") return { view: "flight" };
+  if (a === "analytics") return { view: "analytics" };
   return { view: "queue" };
 }
 

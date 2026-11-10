@@ -10,7 +10,7 @@ deterministic test gate is unaffected. Only the serve loop is uncovered.
 import os
 import time
 
-from . import caddy_logs, logview
+from . import analytics, caddy_logs, logview
 from .models import IngestState, LogLine
 from .monitor_inventory import INVENTORY
 
@@ -45,6 +45,9 @@ def ingest_once(session, path):
     mapping = _host_container_map()
     count = 0
     for line in consumed.decode("utf-8", "replace").splitlines():
+        hit = analytics.web_hit(line)
+        if hit:
+            session.add(hit)
         rec = caddy_logs.parse_record(line)
         if not rec:
             continue
@@ -82,8 +85,13 @@ def serve():  # pragma: no cover - process loop
     app = create_app()
     path = os.environ.get("CADDY_ACCESS_LOG")
     interval = int(os.environ.get("LOG_INGEST_INTERVAL", "5"))
+    ghstats_dir = os.environ.get("GHSTATS_DATA_DIR")
+    last_sync = 0.0
     while True:
         run_once(app.db_session, path, time.time())
+        if ghstats_dir and time.time() - last_sync > 300:
+            analytics.sync_ghstats(app.db_session, ghstats_dir)
+            last_sync = time.time()
         app.db_session.remove()
         time.sleep(interval)
 

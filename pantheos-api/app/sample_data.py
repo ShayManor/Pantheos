@@ -149,3 +149,64 @@ SAMPLE_SESSIONS = [
         {"who": "flight", "text": "Programmatic per-profile pages are the highest-leverage move — indexable long-tail surface you don't have yet. Filed as GHS-0308 with OG images + schema.org markup.", "tools": ["github", "vm"]},
     ]},
 ]
+
+
+# Analytics station demo traffic (gh-stats + GPUFindr). Deterministic: a hash
+# stands in for randomness and every timestamp hangs off ANALYTICS_NOW, so the
+# E2E gate sees the same page on every run.
+ANALYTICS_NOW = 1794340800.0      # 2026-11-10 15:00 America/New_York
+_GHS_USERS = ["octocat", "torvalds", "sindresorhus", "gaearon", "yyx990803", "tj", "kentcdodds",
+              "addyosmani", "jdoe", "alice-dev", "mrdoob", "antfu", "rauchg", "shadcn", "leerob",
+              "bradtraversy", "wesbos", "getify", "mpj", "fireship-io", "t3dotgg", "jessfraz",
+              "bkeepers", "defunkt", "mojombo", "pjhyett", "wycats", "dhh", "fat", "mdo"]
+_GPUS = ["rtx 5090", "h100", "a100", "rtx 4090", "l40s"]
+_PROVIDERS = ["runpod", "vast", "lambda", "lium", "azure"]
+
+
+def _r(*key):
+    import hashlib
+    return int(hashlib.sha256(repr(key).encode()).hexdigest()[:8], 16) / 2 ** 32
+
+
+def _hour_weight(h):
+    """Diurnal load curve peaking mid-afternoon."""
+    return 0.25 + 0.75 * max(0.0, 1 - abs(h - 15) / 9)
+
+
+def sample_analytics():
+    """(ghstats users, ghstats events, ghstats backfill days, web hits) as dicts."""
+    day = 86400.0
+    users, events, backfill, hits = [], [], [], []
+    sid = 0
+    for i, name in enumerate(_GHS_USERS):
+        users.append({"username": name, "oauth": i % 4 == 0, "enrolled_at": "2026-05-01T00:00:00Z"})
+        kind = "tried" if i % 7 == 6 else "stopped" if i % 5 == 4 else "live"
+        start = int(10 + _r("start", i) * 150)               # days ago it began
+        end = 0 if kind == "live" else int(8 + _r("end", i) * 20) if kind == "stopped" else start
+        rate = 3 + int(_r("rate", i) * 25)
+        for ago in range(start, end - 1, -1):
+            if ago >= 14:
+                backfill.append({"username": name, "day_ago": ago})
+                continue
+            for h in range(24 if ago else 16):              # nothing after "now"
+                n = int(rate * _hour_weight(h) / 6 + _r("ev", i, ago, h))
+                for k in range(n):
+                    sid += 1
+                    events.append({"src_id": sid, "username": name,
+                                   "ts": ANALYTICS_NOW - ago * day - (15 - h) * 3600 + k * 97,
+                                   "endpoint": "/api/<u>", "widget": "composite" if k % 3 else "grade"})
+    for v in range(40):
+        site = "gpufindr" if v % 3 else "ghstats"
+        for visit in range(1 + int(_r("visits", v) * 4)):
+            t = ANALYTICS_NOW - int(_r("when", v, visit) * 13 * day) - 3600
+            for step in range(1 + int(_r("steps", v, visit) * 6)):
+                ts = t + step * (20 + int(_r("gap", v, visit, step) * 120))
+                path, query = "/", ""
+                if site == "gpufindr" and step:
+                    path = "/gpus"
+                    query = f"name={_GPUS[v % 5]}&source={_PROVIDERS[(v + step // 3) % 5]}&limit=500"
+                elif site == "ghstats" and step:
+                    path = f"/api/{_GHS_USERS[v % 30]}/settings"
+                hits.append({"site": site, "ts": ts, "visitor": f"v{v:03d}{site[:3]}", "path": path,
+                             "query": query, "status": 200})
+    return users, events, backfill, hits

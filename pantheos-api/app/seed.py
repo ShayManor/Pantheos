@@ -174,5 +174,22 @@ def seed_sample(session):
             session.add(DelphiMessage(session_id=sess["id"], who=msg["who"], text=msg["text"],
                                       tools=msg.get("tools"), position=j))
 
+    seed_sample_analytics(session)
     session.commit()
     seed_container_logs(session)
+
+
+def seed_sample_analytics(session):
+    """Demo traffic for the Analytics station (tests and E2E reseed only)."""
+    from datetime import datetime, timedelta
+    from . import analytics
+    from . import sample_data as SS
+    from .models import GhstatsEvent, GhstatsUser, GhstatsUserDay, WebHit
+    users, events, backfill, hits = SS.sample_analytics()
+    today = datetime.fromtimestamp(SS.ANALYTICS_NOW, analytics._tz()).date()
+    session.add_all([GhstatsUser(**u) for u in users])
+    session.add_all([GhstatsEvent(**e) for e in events])
+    session.add_all([GhstatsUserDay(username=b["username"],
+                                    day=(today - timedelta(days=b["day_ago"])).isoformat())
+                     for b in backfill])
+    session.add_all([WebHit(**h) for h in hits])

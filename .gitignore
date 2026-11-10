@@ -251,3 +251,6 @@ docs/spec.md
 
 # Alertmanager bearer credential for the auth gate, written at deploy time.
 monitoring/service-token
+
+# local screenshots / previews
+data/previews/

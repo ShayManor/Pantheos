@@ -303,3 +303,41 @@ class IngestState(Base):
     path = Column(String, primary_key=True)           # the CADDY_ACCESS_LOG path
     inode = Column(BigInteger, nullable=False)
     offset = Column(BigInteger, nullable=False)
+
+
+class WebHit(Base):
+    """One browser request to a tracked site, kept forever (Analytics station)."""
+    __tablename__ = "web_hits"
+    id = Column(Integer, primary_key=True)
+    site = Column(String, nullable=False)             # "ghstats" | "gpufindr"
+    ts = Column(Float, nullable=False)
+    visitor = Column(String, nullable=False)          # sha256(ip|ua)[:12], no raw IPs stored
+    path = Column(String, nullable=False)
+    query = Column(Text, nullable=False, default="")
+    status = Column(Integer, nullable=False)
+    __table_args__ = (Index("ix_web_hits_site_ts", "site", "ts"),)
+
+
+class GhstatsEvent(Base):
+    """gh-stats generator request events, mirrored by source id and kept forever."""
+    __tablename__ = "ghstats_events"
+    src_id = Column(Integer, primary_key=True, autoincrement=False)
+    ts = Column(Float, nullable=False)
+    username = Column(String, nullable=False)
+    endpoint = Column(String, nullable=False)
+    widget = Column(String)
+    __table_args__ = (Index("ix_ghstats_events_ts", "ts"),)
+
+
+class GhstatsUser(Base):
+    __tablename__ = "ghstats_users"
+    username = Column(String, primary_key=True)
+    oauth = Column(Boolean, nullable=False, default=False)
+    enrolled_at = Column(String, nullable=False)
+
+
+class GhstatsUserDay(Base):
+    """Days a gh-stats user was active before events were mirrored (daily_stats backfill)."""
+    __tablename__ = "ghstats_user_days"
+    username = Column(String, primary_key=True)
+    day = Column(String, primary_key=True)            # YYYY-MM-DD (UTC)

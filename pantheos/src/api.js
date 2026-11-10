@@ -85,6 +85,8 @@ export const api = {
     req("GET", `/api/containers/${id}/logs/range${qs({ from, to })}`),
   usage: () => req("GET", "/api/monitor/usage"),
   errseries: () => req("GET", "/api/monitor/errseries"),
+  analytics: (site, range) => req("GET", `/api/analytics/${site}${qs({ range })}`),
+  analyticsUser: (site, id) => req("GET", `/api/analytics/${site}/users/${encodeURIComponent(id)}`),
   authMe: () => req("GET", "/api/auth/me"),
 
   launch: (id) => req("POST", `/api/tickets/${id}/launch`),

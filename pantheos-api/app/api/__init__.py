@@ -16,10 +16,11 @@ def get_or_404(model, id_):
 
 def register_blueprints(app):
     from .admin import bp as admin_bp
+    from .analytics import bp as analytics_bp
     from .context import bp as context_bp
     from .delphi import bp as delphi_bp
     from .monitor import bp as monitor_bp
     from .tickets import bp as tickets_bp
 
-    for bp in (tickets_bp, monitor_bp, delphi_bp, context_bp, admin_bp):
+    for bp in (tickets_bp, monitor_bp, delphi_bp, context_bp, admin_bp, analytics_bp):
         app.register_blueprint(bp)

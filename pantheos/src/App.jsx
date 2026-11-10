@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import React from "react";
-import { Check, ChevronRight, Clock, Gauge, ListChecks, LogOut, Radio, Satellite } from "lucide-react";
+import { BarChart3, Check, ChevronRight, Clock, Gauge, ListChecks, LogOut, Radio, Satellite } from "lucide-react";
 import { CSS } from "./styles.js";
 import { Nav } from "./nav.jsx";
 import { useAuth } from "./auth.jsx";
@@ -14,6 +14,7 @@ import MonitorView, { MonProjectDetail, HostDetail } from "./views/MonitorView.j
 import ContainerDetail from "./views/ContainerDetail.jsx";
 import ContainerLogs from "./views/ContainerLogs.jsx";
 import FlightView from "./views/FlightView.jsx";
+import AnalyticsView from "./views/AnalyticsView.jsx";
 import SearchPalette from "./components/SearchPalette.jsx";
 import NewTicketModal from "./components/NewTicketModal.jsx";
 import ContextEditor from "./components/ContextEditor.jsx";
@@ -135,6 +136,7 @@ export default function Pantheos() {
     { k: "queue", label: "Queue", icon: ListChecks, cnt: tickets.filter((t) => t.life !== "archived").length },
     { k: "projects", label: "Projects", icon: Satellite, cnt: Object.keys(projects).length },
     { k: "monitor", label: "Monitor", icon: Gauge, cnt: null },
+    { k: "analytics", label: "Analytics", icon: BarChart3, cnt: null },
   ];
 
   useEffect(() => {
@@ -150,7 +152,7 @@ export default function Pantheos() {
     openContext, filter, setFilter, projects, hosts, containers, areas, runsByTicket };
 
   const section = cur.ticketId ? "queue" : cur.view;
-  const secName = { queue: "Queue", projects: "Projects", monitor: "Monitor", flight: "Delphi" }[section] || "Queue";
+  const secName = { queue: "Queue", projects: "Projects", monitor: "Monitor", analytics: "Analytics", flight: "Delphi" }[section] || "Queue";
   const crumbs = [{ label: secName, node: { view: section }, mode: section === "monitor" }];
   if (cur.ticketId) {
     crumbs.push({ label: tickets.find((t) => t.id === cur.ticketId)?.id || cur.ticketId });
@@ -173,6 +175,7 @@ export default function Pantheos() {
   else if (cur.view === "projects") body = <ProjectsView />;
   else if (cur.view === "monitor") body = <MonitorView mode={monMode} setMode={setMonMode} />;
   else if (cur.view === "flight") body = <FlightView />;
+  else if (cur.view === "analytics") body = <AnalyticsView />;
 
   return (
     <div className="gs">

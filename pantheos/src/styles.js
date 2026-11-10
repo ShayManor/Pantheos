@@ -420,4 +420,52 @@ export const CSS = `
 .gs-md pre{overflow:auto;border-radius:8px;padding:10px 12px;margin:8px 0;font-family:var(--mono);font-size:12.5px}
 .gs-md code{font-family:var(--mono);font-size:12.5px}
 .gs-md table{border-collapse:collapse}.gs-md th,.gs-md td{border:1px solid var(--line);padding:4px 8px}
+
+/* analytics station */
+.gs-an-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0 20px;}
+.gs-an-dim{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums;}
+.gs-an-spin{width:13px;height:13px;border-radius:50%;border:2px solid var(--line-2);border-top-color:var(--go);animation:gs-an-spin .7s linear infinite;}
+@keyframes gs-an-spin{to{transform:rotate(360deg);}}
+.gs-an-loading{padding:60px 20px;text-align:center;animation:gs-an-pulse 1.4s ease-in-out infinite;}
+@keyframes gs-an-pulse{50%{opacity:.55;}}
+.gs-an{display:flex;flex-direction:column;gap:16px;transition:opacity .18s;}
+.gs-an.stale{opacity:.55;}
+.gs-an-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;}
+.gs-an-tile{padding:16px 18px 10px;}
+.gs-an-tile .v{font-family:var(--mono);font-size:30px;font-weight:600;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;line-height:1.1;}
+.gs-an-tile .l{font-family:var(--mono);font-size:10px;color:var(--ink-2);letter-spacing:0.06em;margin-top:4px;text-transform:uppercase;}
+.gs-an-card{padding:16px 18px 12px;min-width:0;}
+.gs-an-card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.gs-an-legend{display:flex;gap:14px;font-family:var(--mono);font-size:10.5px;color:var(--ink-2);}
+.gs-an-legend span{display:flex;align-items:center;gap:6px;}
+.gs-an-legend i{display:inline-block;width:14px;height:0;border-radius:2px;padding-top:2px;}
+.gs-an-two{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.gs-an-none{padding:40px 10px;}
+.gs-an-tools{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px;}
+.gs-an-num{opacity:.6;font-variant-numeric:tabular-nums;margin-left:2px;}
+.gs-an-search{display:flex;align-items:center;gap:8px;color:var(--ink-3);min-width:220px;}
+.gs-an-row{display:grid;gap:14px;align-items:center;padding:11px 18px;border-bottom:1px solid var(--line);
+  font-family:var(--mono);font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums;cursor:pointer;transition:background .12s;}
+.gs-an-row.ghstats{grid-template-columns:minmax(150px,1.6fr) 100px 80px 80px 84px 76px 16px;}
+.gs-an-row.gpufindr{grid-template-columns:minmax(120px,1fr) 84px 60px 76px minmax(120px,1.4fr) 84px 76px 16px;}
+.gs-an-row > span:not(:first-child):not(:nth-child(2)){text-align:right;}
+.gs-an-row:hover,.gs-an-row.open{background:var(--surface-2);}
+.gs-an-row.head{font-size:9px;letter-spacing:0.11em;color:var(--ink-3);text-transform:uppercase;background:var(--surface-2);cursor:default;}
+.gs-an-row .nm{color:var(--ink);font-weight:500;display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gs-an-row .chev{color:var(--ink-3);display:flex;justify-content:flex-end;}
+.gs-an-trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gs-an-detail{padding:14px 18px 16px;background:var(--surface-2);border-bottom:1px solid var(--line);animation:gs-an-in .16s ease-out;}
+@keyframes gs-an-in{from{opacity:0;transform:translateY(-3px);}}
+.gs-an-detail-grid{display:grid;grid-template-columns:2fr 1fr;gap:22px;}
+.gs-an-k{font-family:var(--mono);font-size:9.5px;letter-spacing:0.11em;color:var(--ink-3);margin-bottom:8px;}
+.gs-an-top{display:flex;justify-content:space-between;gap:10px;font-family:var(--mono);font-size:12px;color:var(--ink-2);
+  padding:5px 0;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;}
+.gs-an-top b{color:var(--ink);font-weight:600;}
+@media (max-width:820px){
+  .gs-an-two,.gs-an-detail-grid{grid-template-columns:1fr;}
+  .gs-an-row.ghstats{grid-template-columns:1fr 92px 64px 16px;}
+  .gs-an-row.ghstats > :nth-child(3),.gs-an-row.ghstats > :nth-child(5),.gs-an-row.ghstats > :nth-child(6){display:none;}
+  .gs-an-row.gpufindr{grid-template-columns:1fr 80px 64px 16px;}
+  .gs-an-row.gpufindr > :nth-child(3),.gs-an-row.gpufindr > :nth-child(4),.gs-an-row.gpufindr > :nth-child(5),.gs-an-row.gpufindr > :nth-child(6){display:none;}
+}
 `;
