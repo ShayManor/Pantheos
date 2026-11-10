@@ -126,7 +126,7 @@ services:
       CADDY_ACCESS_LOG: /var/log/caddy/access.log
       PANTHEOS_DATABASE_URL: postgresql+psycopg://pantheos:pantheos@127.0.0.1:5432/pantheos
       LOG_INGEST_INTERVAL: "5"
-      GHSTATS_DATA_DIR: /ghstats-data   # Analytics: gh-stats users + embed events, read-only
+      GHSTATS_DATA_DIR: /ghstats-data   # Analytics: gh-stats enrolled users (OAuth), read-only
     volumes:
       - /var/log/caddy:/var/log/caddy:ro
       # Not :ro: gh-stats' SQLite runs in WAL mode, and a WAL reader must write the

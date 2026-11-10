@@ -3,7 +3,7 @@ import {
   Activity, BarChart3, CalendarDays, ChevronDown, ChevronRight, Clock, Search, Users,
 } from "lucide-react";
 import {
-  Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { api } from "../api.js";
 
@@ -13,11 +13,11 @@ const TIP = { fontFamily: "var(--mono)", fontSize: 11, borderRadius: 8, border: 
 const RANGES = [["7d", "7D"], ["30d", "30D"], ["90d", "90D"], ["all", "ALL"]];
 const SITES = { ghstats: "gh-stats", gpufindr: "GPUFindr" };
 const STATUS = {
-  ghstats: { live: ["go", "Live"], stopped: ["flt", "Stopped"], tried: ["neu", "Tried once"] },
+  ghstats: { live: ["go", "Live"], stopped: ["flt", "Stopped"], none: ["neu", "Never embedded"] },
   gpufindr: { live: ["go", "Active"], stopped: ["neu", "Lapsed"] },
 };
 const FILTERS = {
-  ghstats: [["all", "All"], ["live", "Live"], ["stopped", "Stopped"], ["tried", "Tried once"], ["oauth", "OAuth"]],
+  ghstats: [["all", "All"], ["live", "Live"], ["stopped", "Stopped"], ["none", "Never embedded"], ["oauth", "OAuth"]],
   gpufindr: [["all", "All"], ["live", "Active"], ["stopped", "Lapsed"], ["searched", "Searched"]],
 };
 
@@ -49,7 +49,7 @@ function Section({ icon: I, title, legend, note, children }) {
   );
 }
 
-function Lines({ data, x, series, height = 200, xFmt }) {
+function Lines({ data, x, series, height = 200, xFmt, marker }) {
   return (
     <div style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
@@ -58,6 +58,10 @@ function Lines({ data, x, series, height = 200, xFmt }) {
           <XAxis dataKey={x} tick={TICK} axisLine={false} tickLine={false} tickFormatter={xFmt} minTickGap={24} />
           <YAxis tick={TICK} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip contentStyle={TIP} labelFormatter={xFmt} />
+          {marker && (
+            <ReferenceLine x={marker.x} stroke={MUTED} strokeDasharray="3 3"
+              label={{ value: marker.label, position: "insideTopLeft", fill: MUTED, fontSize: 10, fontFamily: "var(--mono)" }} />
+          )}
           {series.map(([k, c, name, dash]) => (
             <Line key={k} type="monotone" dataKey={k} name={name} stroke={c} strokeWidth={dash ? 1.5 : 2}
               strokeDasharray={dash ? "4 4" : undefined} dot={false} isAnimationActive={false} />
@@ -83,7 +87,7 @@ function Bars({ data, x = "k", series = [["v", GO, "count"]], height = 180, layo
             </>
           ) : (
             <>
-              <XAxis dataKey={x} tick={TICK} axisLine={false} tickLine={false} tickFormatter={xFmt} />
+              <XAxis dataKey={x} tick={TICK} axisLine={false} tickLine={false} tickFormatter={xFmt} minTickGap={20} />
               <YAxis tick={TICK} axisLine={false} tickLine={false} allowDecimals={false}
                 tickFormatter={stack ? (v) => Math.abs(v) : undefined} />
             </>
@@ -91,7 +95,7 @@ function Bars({ data, x = "k", series = [["v", GO, "count"]], height = 180, layo
           <Tooltip contentStyle={TIP} labelFormatter={xFmt} cursor={{ fill: "#F4F6F8" }}
             formatter={stack ? (v, n) => [Math.abs(v), n] : undefined} />
           {series.map(([k, c, name]) => (
-            <Bar key={k} dataKey={k} name={name} fill={c} stackId={stack ? "s" : undefined}
+            <Bar key={k} dataKey={k} name={name} fill={c} stackId={stack ? "s" : undefined} maxBarSize={56}
               radius={vertical ? [0, 3, 3, 0] : [3, 3, 0, 0]} isAnimationActive={false} />
           ))}
         </BarChart>
@@ -119,18 +123,18 @@ function UserDetail({ site, id }) {
   useEffect(() => { api.analyticsUser(site, id).then(setD).catch(() => setD({ error: true })); }, [site, id]);
   if (!d) return <div className="gs-an-detail gs-an-dim">Loading timeline…</div>;
   if (d.error) return <div className="gs-an-detail gs-an-dim">No activity recorded.</div>;
+  if (!d.timeline.length) return (
+    <div className="gs-an-detail gs-an-dim">
+      GitHub has never fetched this user's widget, so it isn't in any README.{d.enrolled ? ` Enrolled ${fmtDay(d.enrolled)}.` : ""}
+    </div>
+  );
   const unit = site === "ghstats" ? "embed loads" : "requests";
-  // Days from the gh-stats rollup were active but their load counts weren't kept.
-  const timeline = d.timeline.map((t) => ({ ...t, seen: t.on && !t.v ? 1 : 0 }));
-  const hasSeen = timeline.some((t) => t.seen);
   return (
     <div className="gs-an-detail">
       <div className="gs-an-detail-grid">
         <div>
           <div className="gs-an-k">{unit.toUpperCase()} PER DAY · {fmtDay(d.timeline[0].d)} → {fmtDay(d.timeline[d.timeline.length - 1].d)}</div>
-          <Bars data={timeline} x="d" xFmt={fmtDay} height={120} stack
-            series={[["v", GO, unit], ...(hasSeen ? [["seen", "#BFE0CE", "active, count not kept"]] : [])]} />
-          {hasSeen && <div className="gs-an-dim" style={{ marginTop: 6 }}>Light bars: active days from before per-day counts were saved.</div>}
+          <Bars data={d.timeline} x="d" xFmt={fmtDay} height={120} series={[["v", GO, unit]]} />
         </div>
         <div>
           <div className="gs-an-k">{site === "ghstats" ? "WIDGETS" : "SEARCHES"}</div>
@@ -159,7 +163,7 @@ function UsersTable({ site, users }) {
     (filter === "all" || u.status === filter || (filter === "oauth" && u.oauth) || (filter === "searched" && u.searches))
     && u.id.toLowerCase().includes(q.toLowerCase()));
   const gh = site === "ghstats";
-  const cols = gh ? ["User", "Status", "Embedded", "Loads", "Site time", "Last seen"]
+  const cols = gh ? ["User", "Status", "Embedded", "Loads", "Site time", "Last load"]
     : ["Visitor", "Status", "Visits", "Searches", "Most searched", "Site time", "Last seen"];
   return (
     <>
@@ -187,7 +191,8 @@ function UsersTable({ site, users }) {
                 <span><span className={`pill ${tone}`}>{label}</span></span>
                 {gh ? (
                   <>
-                    <span>{u.embedded_days}d</span>
+                    <span title={u.since_tracking ? "Already embedding when GitHub fetch tracking began" : undefined}>
+                      {u.embedded_days ? `${u.embedded_days}d${u.since_tracking ? "+" : ""}` : "—"}</span>
                     <span>{u.loads.toLocaleString()}</span>
                   </>
                 ) : (
@@ -198,7 +203,7 @@ function UsersTable({ site, users }) {
                   </>
                 )}
                 <span>{u.site_s ? fmtDur(u.site_s) : "—"}</span>
-                <span>{fmtDay(u.last)}</span>
+                <span>{u.last ? fmtDay(u.last) : "—"}</span>
                 <span className="chev">{isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</span>
               </div>
               {isOpen && <UserDetail site={site} id={u.id} />}
@@ -267,9 +272,10 @@ export default function AnalyticsView() {
           </div>
 
           <Section icon={CalendarDays} title="HISTORY · PER DAY"
-            legend={gh ? [[GO, "Active users"], [INFO, "Live embeds"]] : [[GO, "Visitors"], [INFO, "Searches"]]}>
+            legend={gh ? [[GO, "Embeds loaded"], [INFO, "Live embeds"]] : [[GO, "Visitors"], [INFO, "Searches"]]}>
             <Lines data={shown.history} x="d" xFmt={fmtDay} height={230}
-              series={gh ? [["users", GO, "Active users"], ["live", INFO, "Live embeds"]]
+              marker={gh && shown.tracked_from > shown.start ? { x: shown.tracked_from, label: "GitHub fetch tracking starts" } : null}
+              series={gh ? [["users", GO, "Embeds loaded"], ["live", INFO, "Live embeds"]]
                 : [["visitors", GO, "Visitors"], ["searches", INFO, "Searches"]]} />
           </Section>
 

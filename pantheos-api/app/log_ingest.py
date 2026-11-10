@@ -45,9 +45,7 @@ def ingest_once(session, path):
     mapping = _host_container_map()
     count = 0
     for line in consumed.decode("utf-8", "replace").splitlines():
-        hit = analytics.web_hit(line)
-        if hit:
-            session.add(hit)
+        session.add_all(analytics.records(line))
         rec = caddy_logs.parse_record(line)
         if not rec:
             continue

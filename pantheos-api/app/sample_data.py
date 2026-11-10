@@ -174,27 +174,28 @@ def _hour_weight(h):
 
 
 def sample_analytics():
-    """(ghstats users, ghstats events, ghstats backfill days, web hits) as dicts."""
+    """(ghstats users, camo widget loads, web hits) as dicts. Fetch tracking
+    starts 20 days before ANALYTICS_NOW, like a deploy partway into a range.
+
+    Every seventh user enrolled but never embedded (an editor preview or a
+    scanner-made name), so they get no proxy loads at all."""
     day = 86400.0
-    users, events, backfill, hits = [], [], [], []
-    sid = 0
+    users, loads, hits = [], [], []
     for i, name in enumerate(_GHS_USERS):
         users.append({"username": name, "oauth": i % 4 == 0, "enrolled_at": "2026-05-01T00:00:00Z"})
-        kind = "tried" if i % 7 == 6 else "stopped" if i % 5 == 4 else "live"
-        start = int(10 + _r("start", i) * 150)               # days ago it began
-        end = 0 if kind == "live" else int(8 + _r("end", i) * 20) if kind == "stopped" else start
+        kind = "none" if i % 7 == 6 else "stopped" if i % 5 == 4 else "live"
+        if kind == "none":
+            continue
+        start = min(20, int(10 + _r("start", i) * 150))       # days ago it began (or tracking did)
+        end = 0 if kind == "live" else int(8 + _r("end", i) * 5)    # stopped 8–12 days ago
         rate = 3 + int(_r("rate", i) * 25)
         for ago in range(start, end - 1, -1):
-            if ago >= 14:
-                backfill.append({"username": name, "day_ago": ago})
-                continue
             for h in range(24 if ago else 16):              # nothing after "now"
                 n = int(rate * _hour_weight(h) / 6 + _r("ev", i, ago, h))
                 for k in range(n):
-                    sid += 1
-                    events.append({"src_id": sid, "username": name,
-                                   "ts": ANALYTICS_NOW - ago * day - (15 - h) * 3600 + k * 97,
-                                   "endpoint": "/api/<u>", "widget": "composite" if k % 3 else "grade"})
+                    loads.append({"username": name.lower(),
+                                  "ts": ANALYTICS_NOW - ago * day - (15 - h) * 3600 + k * 97,
+                                  "widget": "composite" if k % 3 else "top-langs"})
     for v in range(40):
         site = "gpufindr" if v % 3 else "ghstats"
         for visit in range(1 + int(_r("visits", v) * 4)):
@@ -209,4 +210,4 @@ def sample_analytics():
                     path = f"/api/{_GHS_USERS[v % 30]}/settings"
                 hits.append({"site": site, "ts": ts, "visitor": f"v{v:03d}{site[:3]}", "path": path,
                              "query": query, "status": 200})
-    return users, events, backfill, hits
+    return users, loads, hits
