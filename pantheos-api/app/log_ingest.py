@@ -99,6 +99,11 @@ def serve():  # pragma: no cover - process loop
         if ghstats_dir and time.time() - last_sync > 300:
             analytics.sync_ghstats(app.db_session, ghstats_dir)
             last_sync = time.time()
+        try:
+            analytics.check_readmes(app.db_session, time.time())
+        except Exception as exc:  # GitHub hiccups must not stop log ingest
+            app.db_session.rollback()
+            print("readme check failed:", exc, flush=True)
         app.db_session.remove()
         time.sleep(interval)
 

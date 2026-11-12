@@ -174,18 +174,22 @@ def _hour_weight(h):
 
 
 def sample_analytics():
-    """(ghstats users, camo widget loads, web hits) as dicts. Fetch tracking
+    """(ghstats users, camo widget loads, web hits, README checks) as dicts. Fetch tracking
     starts 20 days before ANALYTICS_NOW, like a deploy partway into a range.
 
     Every seventh user enrolled but never embedded (an editor preview or a
     scanner-made name), so they get no proxy loads at all."""
     day = 86400.0
-    users, loads, hits = [], [], []
+    users, loads, hits, readmes = [], [], [], []
     for i, name in enumerate(_GHS_USERS):
         users.append({"username": name, "oauth": i % 4 == 0, "enrolled_at": "2026-05-01T00:00:00Z"})
         kind = "none" if i % 7 == 6 else "stopped" if i % 5 == 4 else "live"
         if kind == "none":
             continue
+        # Profile README: still linked for live users, removed when they stopped.
+        readmes.append({"username": name.lower(), "embedded": kind == "live", "checked_at": ANALYTICS_NOW - 600,
+                        "first_embedded": ANALYTICS_NOW - 20 * day,
+                        "removed_at": None if kind == "live" else ANALYTICS_NOW - (8 + _r("end", i) * 5) * day})
         start = min(20, int(10 + _r("start", i) * 150))       # days ago it began (or tracking did)
         end = 0 if kind == "live" else int(8 + _r("end", i) * 5)    # stopped 8–12 days ago
         rate = 3 + int(_r("rate", i) * 25)
@@ -210,4 +214,4 @@ def sample_analytics():
                     path = f"/api/{_GHS_USERS[v % 30]}/settings"
                 hits.append({"site": site, "ts": ts, "visitor": f"v{v:03d}{site[:3]}", "path": path,
                              "query": query, "status": 200})
-    return users, loads, hits
+    return users, loads, hits, readmes

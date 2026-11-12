@@ -11,6 +11,10 @@ Two sources feed tables that are never pruned, so history outlives gh-stats'
   and editor previews never count.
 * ``ghstats_users`` — gh-stats' enrolled users (OAuth, enrolment date),
   mirrored read-only by ``sync_ghstats``.
+* ``ghstats_readmes`` — whether each user's profile README links gh-stats,
+  rechecked every few hours by ``check_readmes``. Pulls only happen when
+  someone views a README, so a quiet README can go weeks without one; the
+  README itself says whether the widget is still there.
 
 Embed history starts at the first stored proxy fetch (``tracked_from``); the
 report never guesses about the time before it.
@@ -25,6 +29,8 @@ import json
 import os
 import re
 import sqlite3
+import urllib.error
+import urllib.request
 from collections import Counter, defaultdict
 from contextlib import closing
 from datetime import date, datetime, timedelta
@@ -34,10 +40,12 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func
 
 from . import caddy_logs
-from .models import GhstatsLoad, GhstatsUser, WebHit
+from .models import GhstatsLoad, GhstatsReadme, GhstatsUser, WebHit
 
 SITES = {"ghstats": caddy_logs.GHSTATS_HOSTS, "gpufindr": caddy_logs.GPUFINDR_HOSTS}
 LIVE_DAYS = 7
+README_MAX_AGE = 6 * 3600      # recheck each profile README this often
+README_BATCH = 20              # READMEs fetched per ingest cycle
 TYPING_GAP = 10         # search-as-you-type: keep only the last query of a burst
 SESSION_GAP = 1800
 SEARCH_KEYS = ("name", "source", "location", "max_price", "min_flopsd")
@@ -160,6 +168,50 @@ def sync_ghstats(session, data_dir):
             n += 1
         else:
             row.oauth = bool(oauth)
+    session.commit()
+    return n
+
+
+def _fetch_readme(username):  # pragma: no cover - network
+    """True/False: does github.com/<u>/<u>'s README link gh-stats? None when
+    GitHub could not answer (try again next cycle)."""
+    for name in ("README.md", "readme.md", "Readme.md"):
+        url = f"https://raw.githubusercontent.com/{username}/{username}/HEAD/{name}"
+        try:
+            with urllib.request.urlopen(url, timeout=10) as r:
+                return "gh-stats.com" in r.read(500_000).decode("utf-8", "replace").lower()
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                return None
+        except (urllib.error.URLError, OSError):
+            return None
+    return False
+
+
+def check_readmes(session, now, fetch=_fetch_readme, batch=README_BATCH):
+    """Recheck the profile READMEs that are due (stalest first). Returns how
+    many were checked."""
+    names = {u.username.lower() for u in session.query(GhstatsUser).all()}
+    names |= {u for (u,) in session.query(GhstatsLoad.username).distinct()}
+    rows = {r.username: r for r in session.query(GhstatsReadme).all()}
+    due = sorted((n for n in names if _GH_NAME.match(n) and (n not in rows or rows[n].checked_at < now - README_MAX_AGE)),
+                 key=lambda n: rows[n].checked_at if n in rows else 0)[:batch]
+    n = 0
+    for name in due:
+        found = fetch(name)
+        if found is None:
+            continue
+        row = rows.get(name)
+        if row is None:
+            session.add(GhstatsReadme(username=name, embedded=found, checked_at=now,
+                                      first_embedded=now if found else None))
+        else:
+            if found and not row.embedded:
+                row.first_embedded, row.removed_at = row.first_embedded or now, None
+            elif row.embedded and not found:
+                row.removed_at = now
+            row.embedded, row.checked_at = found, now
+        n += 1
     session.commit()
     return n
 
@@ -304,9 +356,23 @@ def ghstats_report(session, range_days):
     warm = tracked + timedelta(days=LIVE_DAYS - 1)
     start = _start_day(now_day, range_days, tracked)
     span = _days(start, now_day)
-    first = {u: min(ds) for u, ds in days.items()}
-    lastd = {u: max(c) for u, c in counts.items()}           # last proxy fetch decides live/stopped
+    lastd = {u: max(c) for u, c in counts.items()}           # last GitHub pull
     live_cut = now_day - timedelta(days=LIVE_DAYS - 1)
+    readmes = {r.username: r for r in session.query(GhstatsReadme).all()}
+    embedders = set(days) | {u for u, r in readmes.items() if r.first_embedded}
+    seen = [r.first_embedded for r in readmes.values() if r.first_embedded]
+    readme_warm = _day(min(seen), tz) + timedelta(days=1) if seen else None
+    first, status, ended = {}, {}, {}
+    for u in embedders:
+        r = readmes.get(u)
+        starts = ([min(days[u])] if u in days else []) + ([_day(r.first_embedded, tz)] if r and r.first_embedded else [])
+        first[u] = min(starts)
+        pulled = u in lastd and lastd[u] >= live_cut
+        if (r and r.embedded) or pulled:
+            status[u] = "live"
+        else:
+            status[u] = "stopped"
+            ended[u] = _day(r.removed_at, tz) if r and r.removed_at else lastd.get(u, first[u])
 
     active_by_day = Counter(d for ds in days.values() for d in ds)
     live_by_day = Counter()
@@ -325,37 +391,43 @@ def ghstats_report(session, range_days):
     site_time = _site_time_by_user(_sessions(hits), hits)
 
     weeks = defaultdict(lambda: {"started": 0, "stopped": 0})
-    for u in days:
-        if first[u] >= start and first[u] > warm:
+    def already(u):                       # embedding before we could see it start
+        return first[u] <= warm or (readme_warm is not None and first[u] <= readme_warm)
+
+    for u in embedders:
+        if first[u] >= start and not already(u):
             weeks[first[u] - timedelta(days=first[u].weekday())]["started"] += 1
-        if start <= lastd[u] < live_cut:
-            weeks[lastd[u] - timedelta(days=lastd[u].weekday())]["stopped"] += 1
+        if u in ended and ended[u] >= start:
+            weeks[ended[u] - timedelta(days=ended[u].weekday())]["stopped"] += 1
     week0 = start - timedelta(days=start.weekday())
     hourly, weekly = _shape(stamps, now, start, tz)
 
     def name(u):
         return users[u].username if u in users else u
 
+    def span_days(u):
+        return (ended.get(u, now_day) - first[u]).days + 1
+
     table = [{
-        "id": name(u), "oauth": bool(u in users and users[u].oauth),
-        "status": "live" if lastd[u] >= live_cut else "stopped",
-        "first": _iso(first[u]), "last": _iso(lastd[u]),
-        "embedded_days": (lastd[u] - first[u]).days + 1, "since_tracking": first[u] <= warm,
+        "id": name(u), "oauth": bool(u in users and users[u].oauth), "status": status[u],
+        "in_readme": bool(u in readmes and readmes[u].embedded), "stopped_on": _iso(ended.get(u)),
+        "first": _iso(first[u]), "last": _iso(lastd.get(u)),
+        "embedded_days": span_days(u), "since_tracking": already(u),
         "loads": sum(c for d, c in counts[u].items() if d >= start), "site_s": round(site_time.get(u, 0)),
-    } for u in sorted(days, key=lambda u: (lastd[u], u), reverse=True)]
+    } for u in sorted(embedders, key=lambda u: (status[u] == "live", lastd.get(u, first[u]), u), reverse=True)]
     table += [{
-        "id": users[u].username, "oauth": users[u].oauth, "status": "none",
+        "id": users[u].username, "oauth": users[u].oauth, "status": "none", "in_readme": False, "stopped_on": None,
         "first": users[u].enrolled_at[:10], "last": None, "embedded_days": 0, "since_tracking": False, "loads": 0,
         "site_s": round(site_time.get(u, 0)),
-    } for u in sorted(set(users) - set(days), key=lambda u: (users[u].enrolled_at, u), reverse=True)]
+    } for u in sorted(set(users) - embedders, key=lambda u: (users[u].enrolled_at, u), reverse=True)]
 
     return {
         "site": "ghstats", "now": _iso(now_day), "start": _iso(start), "tracked_from": _iso(tracked),
         "tiles": [
             {"k": "embedders", "label": "Embedding users",
-             "v": sum(1 for ds in days.values() if max(ds) >= start),
+             "v": sum(1 for u in embedders if status[u] == "live" or ended[u] >= start),
              "spark": [active_by_day[d] if d >= tracked else None for d in span]},
-            {"k": "live", "label": "Live embeds", "v": live_by_day[now_day],
+            {"k": "live", "label": "Live embeds", "v": sum(1 for u in embedders if status[u] == "live"),
              "spark": [live_by_day[d] if d >= warm else None for d in span]},
             {"k": "time", "label": "Avg time on site", "v": _avg([s[2] for s in sess]), "unit": "s",
              "spark": [_avg(sess_by_day[d]) for d in span]},
@@ -369,7 +441,7 @@ def ghstats_report(session, range_days):
         "hourly": hourly, "weekly": weekly,
         "embeds": [{"w": _iso(w), **weeks[w]} for w in _days(week0, now_day)[::7]
                    if w + timedelta(days=6) >= tracked],
-        "lifetime": _hist([(lastd[u] - first[u]).days + 1 for u in days], LIFETIME_BUCKETS),
+        "lifetime": _hist([span_days(u) for u in embedders], LIFETIME_BUCKETS),
         "sessions": _visits(sess),
         "users": table,
     }
@@ -379,11 +451,14 @@ def ghstats_user(session, username):
     tz = _tz()
     users, loads, counts = _ghstats_activity(session, tz)
     u = username.lower()
-    if u not in counts and u not in users:
+    if u not in counts and u not in users and session.get(GhstatsReadme, u) is None:
         return None
     ds = sorted(counts.get(u, ()))
+    r = session.get(GhstatsReadme, u)
     out = {"id": username, "oauth": bool(u in users and users[u].oauth),
-           "enrolled": users[u].enrolled_at[:10] if u in users else None, "timeline": [], "top": []}
+           "enrolled": users[u].enrolled_at[:10] if u in users else None, "timeline": [], "top": [],
+           "readme": None if r is None else {"embedded": r.embedded, "checked": _iso(_day(r.checked_at, tz)),
+                                              "removed": _iso(_day(r.removed_at, tz)) if r.removed_at else None}}
     if ds:
         out["timeline"] = [{"d": _iso(d), "v": counts[u][d]} for d in _days(ds[0], ds[-1])]
         out["top"] = [{"k": k, "v": v} for k, v in Counter(ld.widget for ld in loads if ld.username == u).most_common(6)]

@@ -334,3 +334,14 @@ class GhstatsLoad(Base):
     username = Column(String, nullable=False)         # lowercased (GitHub names are case-insensitive)
     widget = Column(String, nullable=False)
     __table_args__ = (Index("ix_ghstats_loads_ts", "ts"),)
+
+
+class GhstatsReadme(Base):
+    """Whether a user's profile README (github.com/<u>/<u>) links gh-stats, as of
+    the last check. Ground truth for "still embedded" when nobody views it."""
+    __tablename__ = "ghstats_readmes"
+    username = Column(String, primary_key=True)       # lowercased
+    embedded = Column(Boolean, nullable=False)
+    checked_at = Column(Float, nullable=False)
+    first_embedded = Column(Float)                    # first check that saw the link
+    removed_at = Column(Float)                        # first check without it, after it was seen

@@ -182,9 +182,10 @@ def seed_sample(session):
 def seed_sample_analytics(session):
     """Demo traffic for the Analytics station (tests and E2E reseed only)."""
     from . import sample_data as SS
-    from .models import GhstatsLoad, GhstatsUser, WebHit
-    users, loads, hits = SS.sample_analytics()
+    from .models import GhstatsLoad, GhstatsReadme, GhstatsUser, WebHit
+    users, loads, hits, readmes = SS.sample_analytics()
     from sqlalchemy import insert
     session.execute(insert(GhstatsUser), users)       # bulk executemany: ~15k demo rows per reseed
     session.execute(insert(GhstatsLoad), loads)
     session.execute(insert(WebHit), hits)
+    session.execute(insert(GhstatsReadme), readmes)

@@ -125,7 +125,10 @@ function UserDetail({ site, id }) {
   if (d.error) return <div className="gs-an-detail gs-an-dim">No activity recorded.</div>;
   if (!d.timeline.length) return (
     <div className="gs-an-detail gs-an-dim">
-      GitHub has never fetched this user's widget, so it isn't in any README.{d.enrolled ? ` Enrolled ${fmtDay(d.enrolled)}.` : ""}
+      {d.readme?.embedded
+        ? "Their profile README links gh-stats, but nobody has viewed it since pulls were tracked."
+        : "GitHub has never pulled this user's widget and their profile README has no gh-stats link."}
+      {d.enrolled ? ` Enrolled ${fmtDay(d.enrolled)}.` : ""}
     </div>
   );
   const unit = site === "ghstats" ? "embed loads" : "requests";
@@ -142,6 +145,11 @@ function UserDetail({ site, id }) {
             <div key={t.k} className="gs-an-top"><span>{t.k}</span><b>{t.v.toLocaleString()}</b></div>
           ))}
           {d.enrolled && <div className="gs-an-dim" style={{ marginTop: 10 }}>Enrolled {fmtDay(d.enrolled)}{d.oauth ? " · GitHub OAuth" : ""}</div>}
+          {d.readme && (
+            <div className="gs-an-dim" style={{ marginTop: 4 }}>
+              Profile README {d.readme.embedded ? "links gh-stats" : d.readme.removed ? `dropped gh-stats on ${fmtDay(d.readme.removed)}` : "has no gh-stats link"} · checked {fmtDay(d.readme.checked)}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -163,7 +171,7 @@ function UsersTable({ site, users }) {
     (filter === "all" || u.status === filter || (filter === "oauth" && u.oauth) || (filter === "searched" && u.searches))
     && u.id.toLowerCase().includes(q.toLowerCase()));
   const gh = site === "ghstats";
-  const cols = gh ? ["User", "Status", "Embedded", "Loads", "Site time", "Last load"]
+  const cols = gh ? ["User", "Status", "In README", "Embedded", "Loads", "Site time", "Last pull"]
     : ["Visitor", "Status", "Visits", "Searches", "Most searched", "Site time", "Last seen"];
   return (
     <>
@@ -188,10 +196,11 @@ function UsersTable({ site, users }) {
             <React.Fragment key={u.id}>
               <div className={`gs-an-row ${site} ${isOpen ? "open" : ""}`} onClick={() => setOpen(isOpen ? null : u.id)}>
                 <span className="nm">{u.id}{u.oauth && <span className="pill info">OAuth</span>}</span>
-                <span><span className={`pill ${tone}`}>{label}</span></span>
+                <span><span className={`pill ${tone}`}>{label}{u.stopped_on ? ` · ${fmtDay(u.stopped_on)}` : ""}</span></span>
                 {gh ? (
                   <>
-                    <span title={u.since_tracking ? "Already embedding when GitHub fetch tracking began" : undefined}>
+                    <span className={u.in_readme ? "gs-an-yes" : undefined}>{u.in_readme ? "Yes" : "—"}</span>
+                    <span title={u.since_tracking ? "Already embedding when tracking began" : undefined}>
                       {u.embedded_days ? `${u.embedded_days}d${u.since_tracking ? "+" : ""}` : "—"}</span>
                     <span>{u.loads.toLocaleString()}</span>
                   </>
@@ -272,10 +281,10 @@ export default function AnalyticsView() {
           </div>
 
           <Section icon={CalendarDays} title="HISTORY · PER DAY"
-            legend={gh ? [[GO, "Embeds loaded"], [INFO, "Live embeds"]] : [[GO, "Visitors"], [INFO, "Searches"]]}>
+            legend={gh ? [[GO, "Pulled by GitHub that day"], [INFO, "Pulled within 7 days"]] : [[GO, "Visitors"], [INFO, "Searches"]]}>
             <Lines data={shown.history} x="d" xFmt={fmtDay} height={230}
               marker={gh && shown.tracked_from > shown.start ? { x: shown.tracked_from, label: "GitHub fetch tracking starts" } : null}
-              series={gh ? [["users", GO, "Embeds loaded"], ["live", INFO, "Live embeds"]]
+              series={gh ? [["users", GO, "Pulled by GitHub that day"], ["live", INFO, "Pulled within 7 days"]]
                 : [["visitors", GO, "Visitors"], ["searches", INFO, "Searches"]]} />
           </Section>
 

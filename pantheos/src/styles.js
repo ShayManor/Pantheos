@@ -446,7 +446,8 @@ export const CSS = `
 .gs-an-search{display:flex;align-items:center;gap:8px;color:var(--ink-3);min-width:220px;}
 .gs-an-row{display:grid;gap:14px;align-items:center;padding:11px 18px;border-bottom:1px solid var(--line);
   font-family:var(--mono);font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums;cursor:pointer;transition:background .12s;}
-.gs-an-row.ghstats{grid-template-columns:minmax(150px,1.6fr) 124px 80px 80px 84px 76px 16px;}
+.gs-an-row.ghstats{grid-template-columns:minmax(150px,1.6fr) 140px 76px 80px 70px 84px 76px 16px;}
+.gs-an-yes{color:var(--go);font-weight:600;}
 .gs-an-row.gpufindr{grid-template-columns:minmax(120px,1fr) 84px 60px 76px minmax(120px,1.4fr) 84px 76px 16px;}
 .gs-an-row > span:not(:first-child):not(:nth-child(2)){text-align:right;}
 .gs-an-row:hover,.gs-an-row.open{background:var(--surface-2);}
@@ -463,8 +464,8 @@ export const CSS = `
 .gs-an-top b{color:var(--ink);font-weight:600;}
 @media (max-width:820px){
   .gs-an-two,.gs-an-detail-grid{grid-template-columns:1fr;}
-  .gs-an-row.ghstats{grid-template-columns:1fr 92px 64px 16px;}
-  .gs-an-row.ghstats > :nth-child(3),.gs-an-row.ghstats > :nth-child(5),.gs-an-row.ghstats > :nth-child(6){display:none;}
+  .gs-an-row.ghstats{grid-template-columns:1fr 120px 64px 16px;}
+  .gs-an-row.ghstats > :nth-child(3),.gs-an-row.ghstats > :nth-child(5),.gs-an-row.ghstats > :nth-child(6),.gs-an-row.ghstats > :nth-child(7){display:none;}
   .gs-an-row.gpufindr{grid-template-columns:1fr 80px 64px 16px;}
   .gs-an-row.gpufindr > :nth-child(3),.gs-an-row.gpufindr > :nth-child(4),.gs-an-row.gpufindr > :nth-child(5),.gs-an-row.gpufindr > :nth-child(6){display:none;}
 }

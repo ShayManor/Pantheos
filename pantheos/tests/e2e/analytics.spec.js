@@ -10,14 +10,14 @@ test("analytics shows gh-stats history, embeds and a user's timeline", async ({ 
   await page.locator(".gs-filter", { hasText: "Stopped" }).click();
   const rows = page.locator(".gs-an-row:not(.head)");
   await expect(rows).toHaveCount(6);
-  await expect(rows.first().locator(".pill.flt")).toHaveText("Stopped");
+  await expect(rows.first().locator(".pill.flt")).toHaveText(/^Stopped · [A-Z][a-z]{2} \d+$/);
   await rows.first().click();
   await expect(page.getByText(/EMBED LOADS PER DAY/)).toBeVisible();
 
   await page.locator(".gs-filter", { hasText: "Never embedded" }).click();
   await expect(rows).toHaveCount(4);
   await rows.first().click();
-  await expect(page.getByText(/never fetched this user's widget/)).toBeVisible();
+  await expect(page.getByText(/never pulled this user's widget/)).toBeVisible();
 
   await page.locator(".gs-an-search input").fill("octocat");
   await page.locator(".gs-filter", { hasText: "All" }).click();

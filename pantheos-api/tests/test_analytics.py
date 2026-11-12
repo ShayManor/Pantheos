@@ -3,7 +3,7 @@ import json
 import sqlite3
 
 from app import analytics, log_ingest
-from app.models import GhstatsLoad, GhstatsUser, WebHit
+from app.models import GhstatsLoad, GhstatsReadme, GhstatsUser, WebHit
 from app.sample_data import ANALYTICS_NOW
 
 UA = "Mozilla/5.0 (Macintosh) Safari"
@@ -198,3 +198,61 @@ def test_history_is_null_before_tracking_and_live_needs_a_full_window(client):
 def test_never_embedded_user_detail(session):
     u = analytics.ghstats_user(session, "kentcdodds")
     assert u["timeline"] == [] and u["enrolled"] == "2026-05-01"
+
+
+# ---------------------------------------------------------------- README checks
+
+def test_check_readmes_tracks_link_added_and_removed(session):
+    session.query(GhstatsReadme).delete()                       # start with nothing checked
+    session.commit()
+    state = {"octocat": True, "tj": None}                        # tj: GitHub didn't answer
+
+    def fetch(name):
+        return state.get(name, False)
+
+    n = analytics.check_readmes(session, ANALYTICS_NOW, fetch=fetch, batch=1000)
+    assert n == session.query(GhstatsReadme).count() and session.get(GhstatsReadme, "tj") is None
+    oc = session.get(GhstatsReadme, "octocat")
+    assert oc.embedded and oc.first_embedded == ANALYTICS_NOW
+    assert analytics.check_readmes(session, ANALYTICS_NOW + 60, fetch=fetch) == 0    # nothing due yet
+
+    later = ANALYTICS_NOW + analytics.README_MAX_AGE + 1
+    state["octocat"] = False
+    state["jdoe"] = True
+    analytics.check_readmes(session, later, fetch=fetch, batch=1000)
+    assert (oc.embedded, oc.removed_at) == (False, later)
+    jd = session.get(GhstatsReadme, "jdoe")
+    assert jd.embedded and jd.first_embedded == later                          # added after a "no"
+    state["octocat"] = True
+    analytics.check_readmes(session, later * 2, fetch=fetch, batch=1000)
+    assert oc.embedded and oc.removed_at is None and oc.first_embedded == ANALYTICS_NOW
+
+
+def test_readme_link_keeps_a_quiet_embed_live_and_finds_unpulled_ones(session):
+    session.query(GhstatsLoad).filter_by(username="mdo").delete()             # demo: mdo stopped
+    session.get(GhstatsReadme, "mdo").embedded = True                          # ...but README links it
+    session.add(GhstatsReadme(username="kentcdodds", embedded=True, checked_at=ANALYTICS_NOW,
+                              first_embedded=ANALYTICS_NOW - 3 * 86400))       # never pulled
+    session.commit()
+    by = {u["id"]: u for u in analytics.ghstats_report(session, 30)["users"]}
+    assert (by["mdo"]["status"], by["mdo"]["in_readme"], by["mdo"]["last"]) == ("live", True, None)
+    assert by["kentcdodds"]["status"] == "live" and by["kentcdodds"]["since_tracking"] is False   # a new start
+    u = analytics.ghstats_user(session, "kentcdodds")
+    assert u["timeline"] == [] and u["readme"]["embedded"] is True
+
+
+def test_stopped_users_carry_the_day_the_link_went(client):
+    r = client.get("/api/analytics/ghstats?range=30d").get_json()
+    stopped = [u for u in r["users"] if u["status"] == "stopped"]
+    assert stopped and all(u["stopped_on"] and not u["in_readme"] for u in stopped)
+    assert sum(w["stopped"] for w in r["embeds"]) == len(stopped)
+    d = client.get(f"/api/analytics/ghstats/users/{stopped[0]['id']}").get_json()
+    assert d["readme"]["removed"] == stopped[0]["stopped_on"]
+
+
+def test_readme_only_user_detail_and_unknown(session):
+    session.add(GhstatsReadme(username="readme-only", embedded=True, checked_at=ANALYTICS_NOW,
+                              first_embedded=ANALYTICS_NOW))
+    session.commit()
+    assert analytics.ghstats_user(session, "readme-only")["enrolled"] is None
+    assert analytics.ghstats_user(session, "nobody-at-all") is None
