@@ -26,6 +26,9 @@ else:
     raise SystemExit("database never became reachable")
 
 Base.metadata.create_all(app.db_engine)
+with app.db_engine.begin() as conn:  # create_all never adds a column to an existing table
+    conn.execute(sqlalchemy.text("ALTER TABLE ghstats_readmes ADD COLUMN IF NOT EXISTS linked_at DOUBLE PRECISION"))
+    conn.execute(sqlalchemy.text("ALTER TABLE ghstats_readmes ADD COLUMN IF NOT EXISTS history_at DOUBLE PRECISION"))
 session = app.db_session
 if session.query(Area).count() == 0:
     seed(session)

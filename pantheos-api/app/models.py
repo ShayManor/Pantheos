@@ -345,3 +345,5 @@ class GhstatsReadme(Base):
     checked_at = Column(Float, nullable=False)
     first_embedded = Column(Float)                    # first check that saw the link
     removed_at = Column(Float)                        # first check without it, after it was seen
+    linked_at = Column(Float)                         # commit that added the link, per README history
+    history_at = Column(Float)                        # when that commit history was read

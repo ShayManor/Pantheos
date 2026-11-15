@@ -125,9 +125,15 @@ def test_ghstats_report_ranges(client):
 
 def test_ghstats_embedder_not_enrolled_and_no_site_traffic(session):
     session.query(WebHit).delete()
-    session.add(GhstatsLoad(ts=ANALYTICS_NOW, username="legacy-user", widget="stats"))
+    session.add_all([GhstatsLoad(ts=ANALYTICS_NOW - d * 86400, username="legacy-user", widget="stats") for d in (0, 1)])
+    session.add(GhstatsLoad(ts=ANALYTICS_NOW, username="preview-only", widget="stats"))   # one day: an editor preview
+    session.add_all([GhstatsLoad(ts=ANALYTICS_NOW - d * 86400, username="gone-quiet", widget="stats") for d in (12, 11)])
     session.commit()
     r = analytics.ghstats_report(session, 7)
+    preview = next(u for u in r["users"] if u["id"] == "preview-only")
+    assert (preview["status"], preview["loads"], preview["first"]) == ("none", 1, preview["last"])
+    quiet = next(u for u in r["users"] if u["id"] == "gone-quiet")
+    assert (quiet["status"], quiet["stopped_on"]) == ("stopped", quiet["last"])
     row = next(u for u in r["users"] if u["id"] == "legacy-user")
     assert (row["status"], row["oauth"]) == ("live", False) and r["tiles"][2]["v"] == 0
     assert analytics.ghstats_user(session, "legacy-user")["enrolled"] is None
@@ -182,16 +188,14 @@ def test_shape_leaves_weekdays_without_data_empty():
     assert sum(w["v"] is None for w in weekly) == 6
 
 
-def test_history_is_null_before_tracking_and_live_needs_a_full_window(client):
+def test_pulls_are_null_before_tracking_and_live_follows_readme_history(client):
     r = client.get("/api/analytics/ghstats?range=30d").get_json()
     assert r["tracked_from"] == "2026-10-21"
     before = [h for h in r["history"] if h["d"] < r["tracked_from"]]
-    assert before and all(h["users"] is None and h["live"] is None for h in before)
-    first = next(h for h in r["history"] if h["d"] == r["tracked_from"])
-    assert first["users"] > 0 and first["live"] is None                        # 7-day window not full yet
+    assert before and all(h["users"] is None and h["loads"] is None for h in before)
+    assert all(isinstance(h["live"], int) for h in r["history"])
     assert r["history"][-1]["live"] == r["tiles"][1]["v"]
-    assert all(w["w"] >= "2026-10-19" for w in r["embeds"])                     # no untracked weeks
-    assert r["embeds"][0]["started"] == 0                                       # first-week embedders aren't "started"
+    assert sum(w["started"] for w in r["embeds"]) == 0                          # demo embeds predate tracking
     assert any(u["since_tracking"] for u in r["users"]) and not all(u["since_tracking"] for u in r["users"])
 
 
@@ -210,22 +214,56 @@ def test_check_readmes_tracks_link_added_and_removed(session):
     def fetch(name):
         return state.get(name, False)
 
-    n = analytics.check_readmes(session, ANALYTICS_NOW, fetch=fetch, batch=1000)
+    day = 86400
+    past = {"octocat": (ANALYTICS_NOW - 180 * day, None), "mdo": (ANALYTICS_NOW - 40 * day, ANALYTICS_NOW - 30 * day),
+            "jdoe": None}                                         # jdoe: GitHub didn't answer
+    asked = []
+
+    def history(name):
+        asked.append(name)
+        return past.get(name, (None, None))
+
+    n = analytics.check_readmes(session, ANALYTICS_NOW, fetch=fetch, batch=1000, history=history)
     assert n == session.query(GhstatsReadme).count() and session.get(GhstatsReadme, "tj") is None
     oc = session.get(GhstatsReadme, "octocat")
-    assert oc.embedded and oc.first_embedded == ANALYTICS_NOW
-    assert analytics.check_readmes(session, ANALYTICS_NOW + 60, fetch=fetch) == 0    # nothing due yet
+    assert oc.embedded and oc.first_embedded == ANALYTICS_NOW and oc.linked_at == ANALYTICS_NOW - 180 * day
+    md = session.get(GhstatsReadme, "mdo")                       # pulled, link removed by a commit
+    assert (md.linked_at, md.removed_at) == (ANALYTICS_NOW - 40 * day, ANALYTICS_NOW - 30 * day)
+    assert "kentcdodds" not in asked                              # no link, never pulled: no history needed
+    assert analytics.check_readmes(session, ANALYTICS_NOW + 60, fetch=fetch, history=history) == 0    # nothing due yet
 
     later = ANALYTICS_NOW + analytics.README_MAX_AGE + 1
     state["octocat"] = False
     state["jdoe"] = True
-    analytics.check_readmes(session, later, fetch=fetch, batch=1000)
+    analytics.check_readmes(session, later, fetch=fetch, batch=1000, history=history)
     assert (oc.embedded, oc.removed_at) == (False, later)
     jd = session.get(GhstatsReadme, "jdoe")
-    assert jd.embedded and jd.first_embedded == later                          # added after a "no"
+    assert jd.embedded and jd.first_embedded == later and jd.history_at is None   # added after a "no"
     state["octocat"] = True
-    analytics.check_readmes(session, later * 2, fetch=fetch, batch=1000)
+    analytics.check_readmes(session, later * 2, fetch=fetch, batch=1000, history=history)
     assert oc.embedded and oc.removed_at is None and oc.first_embedded == ANALYTICS_NOW
+    assert oc.linked_at == later * 2 and jd.linked_at is None     # re-added: dated by the check
+
+
+def test_readme_history_dates_embeds_and_removals(session):
+    day = 86400
+    session.get(GhstatsReadme, "octocat").linked_at = ANALYTICS_NOW - 180 * day
+    md = session.get(GhstatsReadme, "mdo")                       # demo: stopped
+    md.linked_at, md.removed_at = ANALYTICS_NOW - 90 * day, ANALYTICS_NOW - 60 * day
+    session.commit()
+    r = analytics.ghstats_report(session, None)
+    by = {u["id"]: u for u in r["users"]}
+    assert (by["octocat"]["embedded_days"], by["octocat"]["since_tracking"]) == (181, False)
+    assert (by["mdo"]["status"], by["mdo"]["embedded_days"]) == ("stopped", 31)       # inclusive, like live rows
+    assert r["start"] == by["octocat"]["first"]                   # "all" reaches back to the oldest README link
+    assert analytics.ghstats_user(session, "octocat")["readme"]["linked"] == by["octocat"]["first"]
+
+
+def test_case_variant_enrollments_merge(session):
+    session.add(GhstatsUser(username="OctoCat", oauth=True, enrolled_at="2026-06-01T00:00:00Z"))
+    session.commit()
+    row = next(u for u in analytics.ghstats_report(session, 30)["users"] if u["id"].lower() == "octocat")
+    assert (row["id"], row["oauth"]) == ("octocat", True)        # earliest casing, OAuth from either
 
 
 def test_readme_link_keeps_a_quiet_embed_live_and_finds_unpulled_ones(session):

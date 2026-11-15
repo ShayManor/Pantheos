@@ -147,7 +147,7 @@ function UserDetail({ site, id }) {
           {d.enrolled && <div className="gs-an-dim" style={{ marginTop: 10 }}>Enrolled {fmtDay(d.enrolled)}{d.oauth ? " · GitHub OAuth" : ""}</div>}
           {d.readme && (
             <div className="gs-an-dim" style={{ marginTop: 4 }}>
-              Profile README {d.readme.embedded ? "links gh-stats" : d.readme.removed ? `dropped gh-stats on ${fmtDay(d.readme.removed)}` : "has no gh-stats link"} · checked {fmtDay(d.readme.checked)}
+              Profile README {d.readme.embedded ? `links gh-stats${d.readme.linked ? ` since ${fmtDay(d.readme.linked)}` : ""}` : d.readme.removed ? `dropped gh-stats on ${fmtDay(d.readme.removed)}` : "has no gh-stats link"} · checked {fmtDay(d.readme.checked)}
             </div>
           )}
         </div>
@@ -281,10 +281,10 @@ export default function AnalyticsView() {
           </div>
 
           <Section icon={CalendarDays} title="HISTORY · PER DAY"
-            legend={gh ? [[GO, "Pulled by GitHub that day"], [INFO, "Pulled within 7 days"]] : [[GO, "Visitors"], [INFO, "Searches"]]}>
+            legend={gh ? [[GO, "Pulled by GitHub that day"], [INFO, "Live embeds"]] : [[GO, "Visitors"], [INFO, "Searches"]]}>
             <Lines data={shown.history} x="d" xFmt={fmtDay} height={230}
               marker={gh && shown.tracked_from > shown.start ? { x: shown.tracked_from, label: "GitHub fetch tracking starts" } : null}
-              series={gh ? [["users", GO, "Pulled by GitHub that day"], ["live", INFO, "Pulled within 7 days"]]
+              series={gh ? [["users", GO, "Pulled by GitHub that day"], ["live", INFO, "Live embeds"]]
                 : [["visitors", GO, "Visitors"], ["searches", INFO, "Searches"]]} />
           </Section>
 
