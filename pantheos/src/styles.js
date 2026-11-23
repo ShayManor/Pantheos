@@ -452,6 +452,8 @@ export const CSS = `
 .gs-an-row > span:not(:first-child):not(:nth-child(2)){text-align:right;}
 .gs-an-row:hover,.gs-an-row.open{background:var(--surface-2);}
 .gs-an-row.head{font-size:9px;letter-spacing:0.11em;color:var(--ink-3);text-transform:uppercase;background:var(--surface-2);cursor:default;}
+.gs-an-row.head .sort{cursor:pointer;user-select:none;white-space:nowrap;}
+.gs-an-row.head .sort:hover,.gs-an-row.head .sort.on{color:var(--ink);}
 .gs-an-row .nm{color:var(--ink);font-weight:500;display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .gs-an-row .chev{color:var(--ink-3);display:flex;justify-content:flex-end;}
 .gs-an-trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}

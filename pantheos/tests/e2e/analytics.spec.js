@@ -24,6 +24,28 @@ test("analytics shows gh-stats history, embeds and a user's timeline", async ({ 
   await expect(rows).toHaveCount(1);
 });
 
+test("analytics user table sorts by a clicked column, ascending then descending", async ({ page }) => {
+  await navTo(page, "Analytics");
+  const head = page.locator(".gs-an-row.head .sort", { hasText: "Loads" });
+  const loads = async () => (await page.locator(".gs-an-row:not(.head) > :nth-child(5)").allTextContents())
+    .map((t) => Number(t.replace(/,/g, "")));
+  await head.click();
+  await expect(head).toHaveText("Loads ↑");
+  let v = await loads();
+  expect(v.length).toBeGreaterThan(1);
+  expect(v).toEqual([...v].sort((a, b) => a - b));
+  await head.click();
+  await expect(head).toHaveText("Loads ↓");
+  v = await loads();
+  expect(v).toEqual([...v].sort((a, b) => b - a));
+  expect(v[0]).toBeGreaterThan(v[v.length - 1]);
+
+  await page.locator(".gs-toggle button", { hasText: "GPUFindr" }).click();
+  const visits = page.locator(".gs-an-row.head .sort", { hasText: "Visits" });
+  await visits.click();
+  await expect(visits).toHaveText("Visits ↑");
+});
+
 test("analytics GPUFindr shows searches and visitors", async ({ page }) => {
   await navTo(page, "Analytics");
   await page.locator(".gs-toggle button", { hasText: "GPUFindr" }).click();

@@ -20,6 +20,12 @@ const FILTERS = {
   ghstats: [["all", "All"], ["live", "Live"], ["stopped", "Stopped"], ["none", "Never embedded"], ["oauth", "OAuth"]],
   gpufindr: [["all", "All"], ["live", "Active"], ["stopped", "Lapsed"], ["searched", "Searched"]],
 };
+const COLS = {
+  ghstats: [["User", (u) => u.id.toLowerCase()], ["Status", (u) => u.status], ["In README", (u) => (u.in_readme ? 1 : 0)],
+    ["Embedded", (u) => u.embedded_days || 0], ["Loads", (u) => u.loads], ["Site time", (u) => u.site_s || 0], ["Last pull", (u) => u.last || ""]],
+  gpufindr: [["Visitor", (u) => u.id.toLowerCase()], ["Status", (u) => u.status], ["Visits", (u) => u.visits], ["Searches", (u) => u.searches],
+    ["Most searched", (u) => [u.gpu, u.provider].filter(Boolean).join(" · ").toLowerCase()], ["Site time", (u) => u.site_s || 0], ["Last seen", (u) => u.last || ""]],
+};
 
 export const fmtDur = (s) => {
   if (!s) return "0s";
@@ -161,7 +167,8 @@ function UsersTable({ site, users }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(null);
   const [limit, setLimit] = useState(50);
-  useEffect(() => { setFilter("all"); setOpen(null); setLimit(50); }, [site]);
+  const [sort, setSort] = useState(null);
+  useEffect(() => { setFilter("all"); setOpen(null); setLimit(50); setSort(null); }, [site]);
   const counts = useMemo(() => {
     const c = { all: users.length, oauth: users.filter((u) => u.oauth).length, searched: users.filter((u) => u.searches).length };
     users.forEach((u) => { c[u.status] = (c[u.status] || 0) + 1; });
@@ -171,8 +178,11 @@ function UsersTable({ site, users }) {
     (filter === "all" || u.status === filter || (filter === "oauth" && u.oauth) || (filter === "searched" && u.searches))
     && u.id.toLowerCase().includes(q.toLowerCase()));
   const gh = site === "ghstats";
-  const cols = gh ? ["User", "Status", "In README", "Embedded", "Loads", "Site time", "Last pull"]
-    : ["Visitor", "Status", "Visits", "Searches", "Most searched", "Site time", "Last seen"];
+  const cols = COLS[site];
+  if (sort) {
+    const key = cols[sort.i][1], dir = sort.desc ? -1 : 1;
+    rows.sort((a, b) => { const x = key(a), y = key(b); return x < y ? -dir : x > y ? dir : 0; });
+  }
   return (
     <>
       <div className="gs-an-tools">
@@ -187,7 +197,10 @@ function UsersTable({ site, users }) {
           value={q} onChange={(e) => setQ(e.target.value)} /></div>
       </div>
       <div className="gs-card" style={{ overflow: "hidden" }}>
-        <div className={`gs-an-row head ${site}`}>{cols.map((c) => <span key={c}>{c}</span>)}<span /></div>
+        <div className={`gs-an-row head ${site}`}>{cols.map(([c], i) => (
+          <span key={c} className={`sort ${sort?.i === i ? "on" : ""}`}
+            onClick={() => setSort({ i, desc: sort?.i === i && !sort.desc })}>{c}{sort?.i === i && (sort.desc ? " ↓" : " ↑")}</span>
+        ))}<span /></div>
         {rows.length === 0 && <div className="gs-empty" style={{ padding: 22 }}>No {gh ? "users" : "visitors"} match.</div>}
         {rows.slice(0, limit).map((u) => {
           const [tone, label] = STATUS[site][u.status];
